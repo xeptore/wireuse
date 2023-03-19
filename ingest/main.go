@@ -181,7 +181,7 @@ func ingestData(collection *mongo.Collection) ingestFunc {
 		models := funcutils.MapSlice(peers, func(p wgtypes.Peer) mongo.WriteModel {
 			return mongo.NewUpdateOneModel().
 				SetFilter(bson.M{"publicKey": p.PublicKey}).
-				SetUpdate(bson.M{"$push": bson.M{"uploadBytes": p.ReceiveBytes, "downloadBytes": p.TransmitBytes}}). // TODO: make sure upload and download byte fields are mapped correctly
+				SetUpdate(bson.M{"$push": bson.M{"usageSnapshots": bson.M{"uploadBytes": p.ReceiveBytes, "downloadBytes": p.TransmitBytes}}}). // TODO: make sure upload and download byte fields are mapped correctly
 				SetUpsert(true)
 		})
 		opts := options.BulkWrite().SetOrdered(false).SetBypassDocumentValidation(true)
