@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,9 +27,9 @@ import (
 	"github.com/xeptore/wireuse/pkg/funcutils"
 )
 
-const (
-	restartMarkFileName = "/tmp/restarted"
-	wgDeviceName        = "wg0"
+var (
+	restartMarkFileName string
+	wgDeviceName        string
 )
 
 type ingestFunc = func(ctx context.Context, peers []wgtypes.Peer) error
@@ -48,6 +50,20 @@ func main() {
 	tz := env.MustGet("TZ")
 	if tz != "UTC" {
 		log.Fatal().Msg("TZ environment variable must be set to UTC")
+	}
+
+	flag.StringVar(&restartMarkFileName, "r", "", "restart-mark file name")
+	flag.StringVar(&wgDeviceName, "i", "", "wireguard interface")
+
+	flag.Parse()
+	if nonFlagArgs := flag.Args(); len(nonFlagArgs) > 0 {
+		log.Fatal().Msgf("expected no additional flags, got: %s", strings.Join(nonFlagArgs, ","))
+	}
+	if restartMarkFileName == "" {
+		log.Fatal().Msg("restart-mark file name option is required and cannot be empty")
+	}
+	if wgDeviceName == "" {
+		log.Fatal().Msg("wireguard device name option is required and cannot be empty")
 	}
 
 	uri := env.MustGet("MONGODB_URI")
