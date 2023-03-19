@@ -9,7 +9,6 @@ jobs:
     permissions:
       packages: write
       contents: read
-      actions: write
     concurrency:
       cancel-in-progress: false
       group: ${{ format('{0}-{1}', github.event_name, github.ref_name) }}
@@ -23,7 +22,7 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ghcr.io/${{ github.repository }}
+            ghcr.io/${{ github.repository }}/ingest
           tags: |
             type=edge
           labels: |
@@ -51,6 +50,6 @@ jobs:
           file: Dockerfile
           no-cache: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}/ingest:latest
           labels: ${{ steps.meta.outputs.labels }}
         timeout-minutes: 10
