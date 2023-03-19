@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -20,6 +22,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/xeptore/wireuse/pkg/env"
+	"github.com/xeptore/wireuse/pkg/funcutils"
 )
 
 const (
@@ -27,7 +30,7 @@ const (
 	wgDeviceName        = "wg0"
 )
 
-type ingestFunc = func(peers []wgtypes.Peer) error
+type ingestFunc = func(ctx context.Context, peers []wgtypes.Peer) error
 
 func main() {
 	ctx := context.Background()
@@ -126,7 +129,7 @@ func main() {
 					ingest = ingestRestartedServerData(collection)
 				}
 
-				if nil := ingest(dev.Peers); nil != err {
+				if nil := ingest(ctx, dev.Peers); nil != err {
 					log.Error().Err(err).Msg("failed to ingest data")
 					continue // not gonna remove the restart-mark file as it might succeed in the next tick.
 				}
@@ -146,7 +149,7 @@ var (
 )
 
 func ingestRestartedServerData(collection *mongo.Collection) ingestFunc {
-	return func(peers []wgtypes.Peer) error {
+	return func(ctx context.Context, peers []wgtypes.Peer) error {
 		// get last usage of every peer
 		// if number of retrieved peer list items > requested ones, return error
 		// in a loop:
@@ -158,8 +161,18 @@ func ingestRestartedServerData(collection *mongo.Collection) ingestFunc {
 }
 
 func ingestData(collection *mongo.Collection) ingestFunc {
-	return func(peers []wgtypes.Peer) error {
-		// append samples to respective peers
+	return func(ctx context.Context, peers []wgtypes.Peer) error {
+		models := funcutils.MapSlice(peers, func(p wgtypes.Peer) mongo.WriteModel {
+			return mongo.NewUpdateOneModel().
+				SetFilter(bson.M{"publicKey": p.PublicKey}).
+				SetUpdate(bson.M{"$push": bson.M{"uploadBytes": p.ReceiveBytes, "downloadBytes": p.TransmitBytes}}). // TODO: make sure upload and download byte fields are mapped correctly
+				SetUpsert(true)
+		})
+		opts := options.BulkWrite().SetOrdered(false).SetBypassDocumentValidation(true)
+		if _, err := collection.BulkWrite(ctx, models, opts); nil != err {
+			return fmt.Errorf("failed to upsert peer models: %v", err)
+		}
+
 		return nil
 	}
 }
