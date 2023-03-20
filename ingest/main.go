@@ -27,9 +27,15 @@ import (
 	"github.com/xeptore/wireuse/pkg/funcutils"
 )
 
+type peerLastUsage struct {
+	upload   uint
+	download uint
+}
+
 var (
 	restartMarkFileName string
 	wgDeviceName        string
+	peersLastUsage      = map[string]peerLastUsage{}
 )
 
 type ingestFunc = func(ctx context.Context, peers []wgtypes.Peer) error
@@ -142,6 +148,10 @@ func main() {
 					}
 					ingest = ingestData(collection)
 				} else if bytes.Equal(content, []byte{1}) {
+					if err := loadBeforeRestartUsage(ctx, collection, dev.Peers); nil != err {
+						log.Error().Err(err).Msg("failed to load last before restart usage records")
+						return
+					}
 					ingest = ingestRestartedServerData(collection)
 				}
 
@@ -152,7 +162,7 @@ func main() {
 
 				// ignore the non-existing restart-mark file error in the removal operation
 				// as it's either the case when it doesn't exist at all, or it's been removed in the previous tick.
-				if err := os.Remove(restartMarkFileName); !errors.Is(err, os.ErrNotExist) {
+				if err := os.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
 					log.Error().Err(err).Msg("failed to remove restart-mark file")
 				}
 			}
@@ -178,10 +188,10 @@ func ingestRestartedServerData(collection *mongo.Collection) ingestFunc {
 
 func ingestData(collection *mongo.Collection) ingestFunc {
 	return func(ctx context.Context, peers []wgtypes.Peer) error {
-		models := funcutils.MapSlice(peers, func(p wgtypes.Peer) mongo.WriteModel {
+		models := funcutils.Map(peers, func(p wgtypes.Peer) mongo.WriteModel {
 			return mongo.NewUpdateOneModel().
 				SetFilter(bson.M{"publicKey": p.PublicKey}).
-				SetUpdate(bson.M{"$push": bson.M{"usageSnapshots": bson.M{"uploadBytes": p.ReceiveBytes, "downloadBytes": p.TransmitBytes}}}). // TODO: make sure upload and download byte fields are mapped correctly
+				SetUpdate(bson.M{"$push": bson.M{"usage": bson.M{"upload": p.ReceiveBytes, "download": p.TransmitBytes}}}). // TODO: make sure upload and download byte fields are mapped correctly
 				SetUpsert(true)
 		})
 		opts := options.BulkWrite().SetOrdered(false).SetBypassDocumentValidation(true)
@@ -191,4 +201,37 @@ func ingestData(collection *mongo.Collection) ingestFunc {
 
 		return nil
 	}
+}
+
+func loadBeforeRestartUsage(ctx context.Context, collection *mongo.Collection, peers []wgtypes.Peer) error {
+	pubKeys := funcutils.Map(peers, func(p wgtypes.Peer) string {
+		return p.PublicKey.String()
+	})
+	cursor, err := collection.Aggregate(ctx, bson.A{
+		bson.M{"$match": bson.M{"publicKey": bson.M{"$in": pubKeys}}},
+		bson.M{"$project": bson.M{"lastUsage": bson.M{"$last": "$usage"}, "_id": 0, "publicKey": 1}},
+	})
+	if nil != err {
+		return fmt.Errorf("failed to query before restart last usage data: %v", err)
+	}
+
+	var results []struct {
+		publicKey string `bson:"publicKey"`
+		lastUsage struct {
+			upload   uint `bson:"upload"`
+			download uint `bson:"download"`
+		} `bson:"lastUsage"`
+	}
+	if err := cursor.All(ctx, &results); nil != err {
+		return fmt.Errorf("failed to read all documents: %v", err)
+	}
+
+	peersLastUsage = make(map[string]peerLastUsage, len(results))
+	for _, v := range results {
+		peersLastUsage[v.publicKey] = peerLastUsage{
+			upload:   v.lastUsage.upload,
+			download: v.lastUsage.download,
+		}
+	}
+	return nil
 }
