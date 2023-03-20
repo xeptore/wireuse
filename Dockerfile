@@ -10,13 +10,13 @@ USER nonroot
 
 WORKDIR /home/nonroot
 
-COPY go.sum go.mod ./
+COPY --chown=nonroot:nonroot go.sum go.mod ./
 
 ENV GOPROXY=https://goproxy.io,direct
 
 RUN go mod download -x
 
-COPY . .
+COPY --chown=nonroot:nonroot . .
 
 RUN make build
 
