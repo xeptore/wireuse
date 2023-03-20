@@ -170,6 +170,77 @@ func main() {
 	}
 }
 
+type wgPeerUsage struct {
+	upload    uint
+	download  uint
+	publicKey string
+}
+
+func readWGPeersUsage(wg *wgctrl.Client) ([]wgPeerUsage, error) {
+	dev, err := wg.Device(wgDeviceName)
+	if nil != err {
+		return nil, err
+	}
+
+	peersUsage := funcutils.Map(dev.Peers, func(p wgtypes.Peer) wgPeerUsage {
+		return wgPeerUsage{
+			upload:    uint(p.ReceiveBytes),
+			download:  uint(p.TransmitBytes),
+			publicKey: p.PublicKey.String(),
+		}
+	})
+	return peersUsage, nil
+}
+
+type Store interface {
+	LoadBeforeRestartUsage(ctx context.Context, peersUsage []wgPeerUsage) error
+	IngestUsage(ctx context.Context, peersUsage []wgPeerUsage) error
+}
+
+type Core struct {
+	readWGPeersUsage    func(ctx context.Context) ([]wgPeerUsage, error)
+	readRestartMarkFile func(filename string) ([1]byte, error)
+	store               Store
+}
+
+func (c *Core) shit(ctx context.Context, tick <-chan struct{}, restartMarkFilename string) error {
+	for range tick {
+		peersUsage, err := c.readWGPeersUsage(ctx)
+		if nil != err {
+			log.Error().Err(err).Msg("failed to get wg device info")
+			return err
+		}
+
+		content, err := c.readRestartMarkFile(restartMarkFilename)
+		if nil != err {
+			// it's ok that the restart-mark file doesn't exist as it means the wg server hasn't been restarted since the previous tick.
+			if !errors.Is(err, os.ErrNotExist) {
+				// log.Error().Err(err).Msg("failed to read restart-mark file")
+				return fmt.Errorf("failed to read restart-mark file: %v", err)
+			}
+			// ingest = ingestData(collection)
+		} else if content == [1]byte{1} {
+			if err := c.store.LoadBeforeRestartUsage(ctx, peersUsage); nil != err {
+				log.Error().Err(err).Msg("failed to load last before restart usage records")
+				return nil
+			}
+			// ingest = ingestRestartedServerData(collection)
+		}
+
+		if nil := c.store.IngestUsage(ctx, peersUsage); nil != err {
+			log.Error().Err(err).Msg("failed to ingest data")
+			continue // not gonna remove the restart-mark file as it might succeed in the next tick.
+		}
+
+		// ignore the non-existing restart-mark file error in the removal operation
+		// as it's either the case when it doesn't exist at all, or it's been removed in the previous tick.
+		if err := os.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
+			log.Error().Err(err).Msg("failed to remove restart-mark file")
+		}
+	}
+	return nil
+}
+
 var (
 	stopSignalErr = errors.New("stop signal received")
 )

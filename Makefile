@@ -7,8 +7,12 @@ tidy:
 .PHONY: tidy
 
 build:
-	go build -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ ./ingest
+	go build -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ ./ingest/cmd
 .PHONY: build
 
 build-clean: clean build
 .PHONY: build-clean
+
+test:
+	go test -race -failfast -v ./...
+.PHONY: test
