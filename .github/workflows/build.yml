@@ -3,15 +3,15 @@ on:
   push:
     branches:
       - main
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   main:
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
-    concurrency:
-      cancel-in-progress: false
-      group: ${{ format('{0}-{1}', github.event_name, github.ref_name) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
