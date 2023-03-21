@@ -18,37 +18,43 @@ type Store interface {
 	IngestUsage(ctx context.Context, peersUsage []PeerUsage) error
 }
 
+type WgPeers interface {
+	Usage(ctx context.Context) ([]PeerUsage, error)
+}
+
+type RestartMarkFileReaderRemover interface {
+	Read(filename string) ([1]byte, error)
+	Remove(filename string) error
+}
+
 type Engine struct {
-	readWGPeersUsage      func(ctx context.Context) ([]PeerUsage, error)
-	readRestartMarkFile   func(filename string) ([1]byte, error)
-	removeRestartMarkFile func(filename string) error
-	store                 Store
+	restartMarkFile RestartMarkFileReaderRemover
+	wgPeers         WgPeers
+	store           Store
 }
 
 func NewEngine(
-	readWGPeersUsage func(ctx context.Context) ([]PeerUsage, error),
-	readRestartMarkFile func(filename string) ([1]byte, error),
-	removeRestartMarkFile func(filename string) error,
+	restartMarkFile RestartMarkFileReaderRemover,
+	wgPeers WgPeers,
 	store Store,
 ) Engine {
 	return Engine{
-		readWGPeersUsage:      readWGPeersUsage,
-		readRestartMarkFile:   readRestartMarkFile,
-		removeRestartMarkFile: removeRestartMarkFile,
-		store:                 store,
+		restartMarkFile: restartMarkFile,
+		wgPeers:         wgPeers,
+		store:           store,
 	}
 }
 
 func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileName string) error {
+	var previousPeersUsage map[string]PeerUsage
 	for range tick {
-		peersUsage, err := e.readWGPeersUsage(ctx)
+		peersUsage, err := e.wgPeers.Usage(ctx)
 		if nil != err {
 			// log.Error().Err(err).Msg("failed to get wg device info")
 			return err
 		}
 
-		var previousPeersUsage map[string]PeerUsage
-		content, err := e.readRestartMarkFile(restartMarkFileName)
+		content, err := e.restartMarkFile.Read(restartMarkFileName)
 		if nil != err {
 			// it's ok that the restart-mark file doesn't exist as it means the wg server hasn't been restarted since the previous tick.
 			if !errors.Is(err, os.ErrNotExist) {
@@ -78,7 +84,7 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 
 		// ignore the non-existing restart-mark file error in the removal operation
 		// as it's either the case when it doesn't exist at all, or it's been removed in the previous tick.
-		if err := e.removeRestartMarkFile(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
+		if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
 			// log.Error().Err(err).Msg("failed to remove restart-mark file")
 		}
 	}

@@ -63,3 +63,93 @@ func (mr *MockStoreMockRecorder) LoadBeforeRestartUsage(ctx interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadBeforeRestartUsage", reflect.TypeOf((*MockStore)(nil).LoadBeforeRestartUsage), ctx)
 }
+
+// MockWgPeers is a mock of WgPeers interface.
+type MockWgPeers struct {
+	ctrl     *gomock.Controller
+	recorder *MockWgPeersMockRecorder
+}
+
+// MockWgPeersMockRecorder is the mock recorder for MockWgPeers.
+type MockWgPeersMockRecorder struct {
+	mock *MockWgPeers
+}
+
+// NewMockWgPeers creates a new mock instance.
+func NewMockWgPeers(ctrl *gomock.Controller) *MockWgPeers {
+	mock := &MockWgPeers{ctrl: ctrl}
+	mock.recorder = &MockWgPeersMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockWgPeers) EXPECT() *MockWgPeersMockRecorder {
+	return m.recorder
+}
+
+// Usage mocks base method.
+func (m *MockWgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Usage", ctx)
+	ret0, _ := ret[0].([]ingest.PeerUsage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Usage indicates an expected call of Usage.
+func (mr *MockWgPeersMockRecorder) Usage(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Usage", reflect.TypeOf((*MockWgPeers)(nil).Usage), ctx)
+}
+
+// MockRestartMarkFileReaderRemover is a mock of RestartMarkFileReaderRemover interface.
+type MockRestartMarkFileReaderRemover struct {
+	ctrl     *gomock.Controller
+	recorder *MockRestartMarkFileReaderRemoverMockRecorder
+}
+
+// MockRestartMarkFileReaderRemoverMockRecorder is the mock recorder for MockRestartMarkFileReaderRemover.
+type MockRestartMarkFileReaderRemoverMockRecorder struct {
+	mock *MockRestartMarkFileReaderRemover
+}
+
+// NewMockRestartMarkFileReaderRemover creates a new mock instance.
+func NewMockRestartMarkFileReaderRemover(ctrl *gomock.Controller) *MockRestartMarkFileReaderRemover {
+	mock := &MockRestartMarkFileReaderRemover{ctrl: ctrl}
+	mock.recorder = &MockRestartMarkFileReaderRemoverMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRestartMarkFileReaderRemover) EXPECT() *MockRestartMarkFileReaderRemoverMockRecorder {
+	return m.recorder
+}
+
+// Read mocks base method.
+func (m *MockRestartMarkFileReaderRemover) Read(filename string) ([1]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Read", filename)
+	ret0, _ := ret[0].([1]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Read indicates an expected call of Read.
+func (mr *MockRestartMarkFileReaderRemoverMockRecorder) Read(filename interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockRestartMarkFileReaderRemover)(nil).Read), filename)
+}
+
+// Remove mocks base method.
+func (m *MockRestartMarkFileReaderRemover) Remove(filename string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Remove", filename)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Remove indicates an expected call of Remove.
+func (mr *MockRestartMarkFileReaderRemoverMockRecorder) Remove(filename interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockRestartMarkFileReaderRemover)(nil).Remove), filename)
+}
