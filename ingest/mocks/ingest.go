@@ -102,31 +102,31 @@ func (mr *MockWgPeersMockRecorder) Usage(ctx interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Usage", reflect.TypeOf((*MockWgPeers)(nil).Usage), ctx)
 }
 
-// MockRestartMarkFileReaderRemover is a mock of RestartMarkFileReaderRemover interface.
-type MockRestartMarkFileReaderRemover struct {
+// MockRestartMarkFileReadRemover is a mock of RestartMarkFileReadRemover interface.
+type MockRestartMarkFileReadRemover struct {
 	ctrl     *gomock.Controller
-	recorder *MockRestartMarkFileReaderRemoverMockRecorder
+	recorder *MockRestartMarkFileReadRemoverMockRecorder
 }
 
-// MockRestartMarkFileReaderRemoverMockRecorder is the mock recorder for MockRestartMarkFileReaderRemover.
-type MockRestartMarkFileReaderRemoverMockRecorder struct {
-	mock *MockRestartMarkFileReaderRemover
+// MockRestartMarkFileReadRemoverMockRecorder is the mock recorder for MockRestartMarkFileReadRemover.
+type MockRestartMarkFileReadRemoverMockRecorder struct {
+	mock *MockRestartMarkFileReadRemover
 }
 
-// NewMockRestartMarkFileReaderRemover creates a new mock instance.
-func NewMockRestartMarkFileReaderRemover(ctrl *gomock.Controller) *MockRestartMarkFileReaderRemover {
-	mock := &MockRestartMarkFileReaderRemover{ctrl: ctrl}
-	mock.recorder = &MockRestartMarkFileReaderRemoverMockRecorder{mock}
+// NewMockRestartMarkFileReadRemover creates a new mock instance.
+func NewMockRestartMarkFileReadRemover(ctrl *gomock.Controller) *MockRestartMarkFileReadRemover {
+	mock := &MockRestartMarkFileReadRemover{ctrl: ctrl}
+	mock.recorder = &MockRestartMarkFileReadRemoverMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockRestartMarkFileReaderRemover) EXPECT() *MockRestartMarkFileReaderRemoverMockRecorder {
+func (m *MockRestartMarkFileReadRemover) EXPECT() *MockRestartMarkFileReadRemoverMockRecorder {
 	return m.recorder
 }
 
 // Read mocks base method.
-func (m *MockRestartMarkFileReaderRemover) Read(filename string) ([1]byte, error) {
+func (m *MockRestartMarkFileReadRemover) Read(filename string) ([1]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Read", filename)
 	ret0, _ := ret[0].([1]byte)
@@ -135,13 +135,13 @@ func (m *MockRestartMarkFileReaderRemover) Read(filename string) ([1]byte, error
 }
 
 // Read indicates an expected call of Read.
-func (mr *MockRestartMarkFileReaderRemoverMockRecorder) Read(filename interface{}) *gomock.Call {
+func (mr *MockRestartMarkFileReadRemoverMockRecorder) Read(filename interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockRestartMarkFileReaderRemover)(nil).Read), filename)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockRestartMarkFileReadRemover)(nil).Read), filename)
 }
 
 // Remove mocks base method.
-func (m *MockRestartMarkFileReaderRemover) Remove(filename string) error {
+func (m *MockRestartMarkFileReadRemover) Remove(filename string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Remove", filename)
 	ret0, _ := ret[0].(error)
@@ -149,7 +149,7 @@ func (m *MockRestartMarkFileReaderRemover) Remove(filename string) error {
 }
 
 // Remove indicates an expected call of Remove.
-func (mr *MockRestartMarkFileReaderRemoverMockRecorder) Remove(filename interface{}) *gomock.Call {
+func (mr *MockRestartMarkFileReadRemoverMockRecorder) Remove(filename interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockRestartMarkFileReaderRemover)(nil).Remove), filename)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockRestartMarkFileReadRemover)(nil).Remove), filename)
 }

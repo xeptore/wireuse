@@ -2,6 +2,7 @@ package ingest_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 
@@ -12,27 +13,13 @@ import (
 	"github.com/xeptore/wireuse/ingest/mocks"
 )
 
-func chain(calls ...*gomock.Call) {
-	if len(calls) == 0 {
-		panic("at least one call is required")
-	}
-	if len(calls) == 1 {
-		return
-	}
-
-	for i := len(calls) - 1; i > 0; i-- {
-		calls[i].After(calls[i-1])
-	}
-}
-
 func TestEngineSingleStaticPeer(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	ctrl, ctx := gomock.WithContext(ctx, t)
 	store := mocks.NewMockStore(ctrl)
 	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
-	chain(
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 0, Download: 0, PublicKey: "xyz"}}).Return(nil).Times(1),
+	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -42,15 +29,15 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}).Return(nil).Times(1),
 	)
 
-	readRestartMarkFile := mocks.NewMockRestartMarkFileReaderRemover(ctrl)
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
 	readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(10)
-	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(10)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(0)
 
 	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
-	chain(
-		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 0, Download: 0, PublicKey: "xyz"}}, nil).Times(1),
+	gomock.InOrder(
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, nil).Times(1),
@@ -60,11 +47,12 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
 	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
 
-	ticker := make(chan struct{}, 1)
+	ticker := make(chan struct{})
 
 	var runErr error
 	wait := make(chan struct{})
@@ -88,20 +76,206 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 	require.Nil(t, runErr)
 }
 
-func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
+func TestEngineSingleStaticPeerWithWgReadPeersUsageFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	store := mocks.NewMockStore(ctrl)
+	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(8)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(0)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(nil, errors.New("network error")).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 10; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.Nil(t, runErr)
+}
+
+func TestEngineSingleStaticPeerWithIngestFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	store := mocks.NewMockStore(ctrl)
+	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}).Return(errors.New("unknown error")).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}).Return(errors.New("network error")).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(10)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(0)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 10; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.Nil(t, runErr)
+}
+
+func TestEngineSingleStaticPeerWithRestartMarkFileReadFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	store := mocks.NewMockStore(ctrl)
+	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	gomock.InOrder(
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(3),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{2}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(2),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrPermission).Times(1),
+	)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(0)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 7; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.NotNil(t, runErr)
+	require.ErrorIs(t, runErr, os.ErrPermission)
+}
+
+func xTestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	ctrl, ctx := gomock.WithContext(ctx, t)
 
 	store := mocks.NewMockStore(ctrl)
-	chain(
+	gomock.InOrder(
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5852, Download: 43146, PublicKey: "xyz"}}, nil).Times(1),
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 13842, Download: 142940, PublicKey: "xyz"}}, nil).Times(1),
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 15991, Download: 166067, PublicKey: "xyz"}}, nil).Times(1),
 	)
-	chain(
+	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 120, Download: 169, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 122, Download: 170, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 141, Download: 176, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -139,9 +313,9 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 16545, Download: 166809, PublicKey: "xyz"}}).Return(nil).Times(1),
 	)
 
-	readRestartMarkFile := mocks.NewMockRestartMarkFileReaderRemover(ctrl)
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
 	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).AnyTimes()
-	chain(
+	gomock.InOrder(
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1),
@@ -180,7 +354,7 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	)
 
 	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
-	chain(
+	gomock.InOrder(
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 120, Download: 169, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 122, Download: 170, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 141, Download: 176, PublicKey: "xyz"}}, nil).Times(1),

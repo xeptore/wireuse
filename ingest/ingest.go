@@ -22,19 +22,19 @@ type WgPeers interface {
 	Usage(ctx context.Context) ([]PeerUsage, error)
 }
 
-type RestartMarkFileReaderRemover interface {
+type RestartMarkFileReadRemover interface {
 	Read(filename string) ([1]byte, error)
 	Remove(filename string) error
 }
 
 type Engine struct {
-	restartMarkFile RestartMarkFileReaderRemover
+	restartMarkFile RestartMarkFileReadRemover
 	wgPeers         WgPeers
 	store           Store
 }
 
 func NewEngine(
-	restartMarkFile RestartMarkFileReaderRemover,
+	restartMarkFile RestartMarkFileReadRemover,
 	wgPeers WgPeers,
 	store Store,
 ) Engine {
@@ -50,23 +50,20 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 	for range tick {
 		peersUsage, err := e.wgPeers.Usage(ctx)
 		if nil != err {
-			// log.Error().Err(err).Msg("failed to get wg device info")
-			return err
+			// TODO: log error
+			continue
 		}
 
+		mustDeleteRestartMarkFile := false
 		content, err := e.restartMarkFile.Read(restartMarkFileName)
-		if nil != err {
-			// it's ok that the restart-mark file doesn't exist as it means the wg server hasn't been restarted since the previous tick.
-			if !errors.Is(err, os.ErrNotExist) {
-				// log.Error().Err(err).Msg("failed to read restart-mark file")
-				return fmt.Errorf("failed to read restart-mark file: %v", err)
-			}
+		if nil != err && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to read restart-mark file: %w", err)
 		} else if content == [1]byte{1} {
 			previousPeersUsage, err = e.store.LoadBeforeRestartUsage(ctx)
 			if nil != err {
-				// log.Error().Err(err).Msg("failed to load last before restart usage records")
-				return err
+				return fmt.Errorf("failed to load last before restart usage records: %v", err)
 			}
+			mustDeleteRestartMarkFile = true
 		}
 
 		if nil != previousPeersUsage {
@@ -77,15 +74,18 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 				}
 			}
 		}
-		if nil := e.store.IngestUsage(ctx, peersUsage); nil != err {
-			// log.Error().Err(err).Msg("failed to ingest data")
+
+		if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
+			// TODO: log error
 			continue // not gonna remove the restart-mark file as it might succeed in the next tick.
 		}
 
 		// ignore the non-existing restart-mark file error in the removal operation
 		// as it's either the case when it doesn't exist at all, or it's been removed in the previous tick.
-		if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
-			// log.Error().Err(err).Msg("failed to remove restart-mark file")
+		if mustDeleteRestartMarkFile {
+			if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
+				// log.Error().Err(err).Msg("failed to remove restart-mark file")
+			}
 		}
 	}
 
