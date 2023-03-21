@@ -3,13 +3,13 @@ clean:
 .PHONY: clean
 
 tidy:
-	go mod tidy -v
+	go mod tidy -v -x
 .PHONY: tidy
 
 build:
 	rm -rfv ./bin
 	mkdir -vp ./bin
-	go build -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ingest ./ingest/cmd
+	go build -x -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ingest ./ingest/cmd
 .PHONY: build
 
 build-clean: clean build
