@@ -9,7 +9,7 @@ tidy:
 build:
 	rm -rfv ./bin
 	mkdir -vp ./bin
-	go build -x -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ingest ./ingest/cmd
+	go build -buildvcs=false -ldflags '-extldflags "-static"' -o ./bin/ingest ./ingest/cmd
 .PHONY: build
 
 build-clean: clean build
