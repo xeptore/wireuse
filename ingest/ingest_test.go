@@ -32,16 +32,16 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 	store := mocks.NewMockStore(ctrl)
 	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
 	chain(
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(0), Download: uint(0), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(10), Download: uint(30), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(20), Download: uint(60), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(30), Download: uint(90), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(40), Download: uint(120), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(50), Download: uint(150), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(60), Download: uint(180), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(70), Download: uint(210), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(80), Download: uint(240), PublicKey: "xyz"}}).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: uint(90), Download: uint(270), PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 0, Download: 0, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}).Return(nil).Times(1),
 	)
 
 	readRestartMarkFile := mocks.NewMockRestartMarkFileReaderRemover(ctrl)
