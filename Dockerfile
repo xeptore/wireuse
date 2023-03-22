@@ -18,7 +18,13 @@ RUN go mod download -x
 
 COPY --chown=nonroot:nonroot . .
 
+ARG GOOS=linux
+
+ARG GOARCH=amd64
+
 RUN make build
+
+RUN mv ./bin/ingest_${GOOS}_${GOARCH} ./bin/ingest
 
 FROM gcr.io/distroless/base-debian11:nonroot
 
