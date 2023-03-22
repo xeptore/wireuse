@@ -273,7 +273,7 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5852, Download: 43146, PublicKey: "xyz"}}, nil).Times(1),
 		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6406, Download: 43888, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 15991, Download: 166067, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8555, Download: 67015, PublicKey: "xyz"}}, nil).Times(1),
 	)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 120, Download: 169, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -318,17 +318,17 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	)
 
 	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
-	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).AnyTimes()
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(4)
 	gomock.InOrder(
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(7),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
-		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(7),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
-		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(7),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
-		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(7),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
 		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
-		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(7),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
 	)
 
 	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
