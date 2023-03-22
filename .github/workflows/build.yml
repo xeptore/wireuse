@@ -6,7 +6,7 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 jobs:
   main:
