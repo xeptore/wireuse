@@ -87,7 +87,6 @@ jobs:
           build-args: |
             GOOS=${{ env.GOOS }}
             GOARCH=${{ env.GOARCH }}
-          tags: |
-            ghcr.io/${{ github.repository }}/ingest:latest
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
         timeout-minutes: 10
