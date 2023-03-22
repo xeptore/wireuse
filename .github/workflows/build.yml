@@ -9,7 +9,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref_type }}
   cancel-in-progress: true
 jobs:
-  main:
+  Build:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -85,8 +85,8 @@ jobs:
           file: Dockerfile
           no-cache: true
           build-args: |
-            GOOS: ${{ env.GOOS }}
-            GOARCH: ${{ env.GOARCH }}
+            GOOS=${{ env.GOOS }}
+            GOARCH=${{ env.GOARCH }}
           tags: |
             ghcr.io/${{ github.repository }}/ingest:latest
           labels: ${{ steps.meta.outputs.labels }}
