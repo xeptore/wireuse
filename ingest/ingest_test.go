@@ -399,3 +399,143 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	<-wait
 	require.Nil(t, runErr)
 }
+
+func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+
+	store := mocks.NewMockStore(ctrl)
+	gomock.InOrder(
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 1, Download: 2, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 155, Download: 217, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5853, Download: 43148, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6407, Download: 43890, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8556, Download: 67017, PublicKey: "xyz"}}, nil).Times(1),
+	)
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 121, Download: 171, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 123, Download: 172, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 142, Download: 178, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 143, Download: 188, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 151, Download: 196, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 152, Download: 200, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 155, Download: 217, PublicKey: "xyz"}}).Return(nil).Times(1),
+
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4131, Download: 29609, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4231, Download: 31778, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4563, Download: 32534, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4632, Download: 35746, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4890, Download: 38015, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5660, Download: 38582, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5853, Download: 43148, PublicKey: "xyz"}}).Return(nil).Times(1),
+
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6366, Download: 43849, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6384, Download: 43850, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6393, Download: 43856, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6395, Download: 43869, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6397, Download: 43878, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6404, Download: 43886, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6407, Download: 43890, PublicKey: "xyz"}}).Return(nil).Times(1),
+
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7777, Download: 57186, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7897, Download: 57949, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7917, Download: 58878, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8320, Download: 59955, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8367, Download: 63399, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8435, Download: 64512, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8556, Download: 67017, PublicKey: "xyz"}}).Return(nil).Times(1),
+
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15058, Download: 143591, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15062, Download: 149517, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15638, Download: 150103, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15916, Download: 157104, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15973, Download: 158862, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 16084, Download: 163395, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 16546, Download: 166811, PublicKey: "xyz"}}).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(5)
+	gomock.InOrder(
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(6),
+	)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 120, Download: 169, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 122, Download: 170, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 141, Download: 176, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 142, Download: 186, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 150, Download: 194, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 151, Download: 198, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
+
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 3976, Download: 29392, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4076, Download: 31561, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4408, Download: 32317, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4477, Download: 35529, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4735, Download: 37798, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5505, Download: 38365, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5698, Download: 42931, PublicKey: "xyz"}}, nil).Times(1),
+
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 513, Download: 701, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 531, Download: 702, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 540, Download: 708, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 542, Download: 721, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 544, Download: 730, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 551, Download: 738, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 554, Download: 742, PublicKey: "xyz"}}, nil).Times(1),
+
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1370, Download: 13296, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1490, Download: 14059, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1510, Download: 14988, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1913, Download: 16065, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1960, Download: 19509, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2028, Download: 20622, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2149, Download: 23127, PublicKey: "xyz"}}, nil).Times(1),
+
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6502, Download: 76574, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6506, Download: 82500, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7082, Download: 83086, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7360, Download: 90087, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7417, Download: 91845, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7528, Download: 96378, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7990, Download: 99794, PublicKey: "xyz"}}, nil).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 35; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.Nil(t, runErr)
+}
