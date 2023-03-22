@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/rs/zerolog"
 )
 
 type PeerUsage struct {
@@ -31,17 +33,20 @@ type Engine struct {
 	restartMarkFile RestartMarkFileReadRemover
 	wgPeers         WgPeers
 	store           Store
+	logger          zerolog.Logger
 }
 
 func NewEngine(
 	restartMarkFile RestartMarkFileReadRemover,
 	wgPeers WgPeers,
 	store Store,
+	logger zerolog.Logger,
 ) Engine {
 	return Engine{
 		restartMarkFile: restartMarkFile,
 		wgPeers:         wgPeers,
 		store:           store,
+		logger:          logger,
 	}
 }
 
@@ -50,7 +55,7 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 	for range tick {
 		peersUsage, err := e.wgPeers.Usage(ctx)
 		if nil != err {
-			// TODO: log error
+			e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
 			continue
 		}
 
@@ -61,7 +66,8 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 		} else if content == [1]byte{1} {
 			previousPeersUsage, err = e.store.LoadBeforeRestartUsage(ctx)
 			if nil != err {
-				return fmt.Errorf("failed to load last before restart usage records: %v", err)
+				e.logger.Error().Err(err).Msg("failed to load before restart peers usage data")
+				continue
 			}
 			mustDeleteRestartMarkFile = true
 		}
@@ -77,16 +83,14 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 
 		if len(peersUsage) > 0 {
 			if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
-				// TODO: log error
-				continue // not gonna remove the restart-mark file as it might succeed in the next tick.
+				e.logger.Error().Err(err).Msg("failed to ingest peers usage data")
+				continue
 			}
 		}
 
-		// ignore the non-existing restart-mark file error in the removal operation
-		// as it's either the case when it doesn't exist at all, or it's been removed in the previous tick.
 		if mustDeleteRestartMarkFile {
 			if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
-				// log.Error().Err(err).Msg("failed to remove restart-mark file")
+				e.logger.Error().Err(err).Msg("failed to remove restart-mark file")
 			}
 		}
 	}

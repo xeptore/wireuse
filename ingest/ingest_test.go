@@ -3,10 +3,12 @@ package ingest_test
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/xeptore/wireuse/ingest"
@@ -50,7 +52,7 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -111,7 +113,7 @@ func TestEngineSingleStaticPeerWithWgReadPeersUsageFailure(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -174,7 +176,7 @@ func TestEngineSingleStaticPeerWithIngestFailure(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -235,7 +237,7 @@ func TestEngineSingleStaticPeerWithRestartMarkFileReadFailure(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -262,6 +264,78 @@ func TestEngineSingleStaticPeerWithRestartMarkFileReadFailure(t *testing.T) {
 	require.ErrorIs(t, runErr, os.ErrPermission)
 }
 
+func TestEngineSingleStaticPeerWithRestartsAndLoadBeforeRestartUsageFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	store := mocks.NewMockStore(ctrl)
+	gomock.InOrder(
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10, Download: 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("network error")).Times(2),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+	)
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30 + 10 + 10, Download: 90 + 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40 + 10 + 10, Download: 120 + 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 80 + 50 + 10 + 10, Download: 240 + 150 + 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90 + 50 + 10 + 10, Download: 270 + 150 + 30 + 80, PublicKey: "xyz"}}).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	gomock.InOrder(
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(3),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(2),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(3),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+	)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(3)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 80, Download: 240, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 90, Download: 270, PublicKey: "xyz"}}, nil).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 100, Download: 300, PublicKey: "xyz"}}, nil).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 10; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.Nil(t, runErr)
+}
+
 func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	t.Parallel()
 
@@ -283,7 +357,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 150, Download: 194, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 151, Download: 198, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 154, Download: 215, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4130, Download: 29607, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4230, Download: 31776, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4562, Download: 32532, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -291,7 +364,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4889, Download: 38013, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5659, Download: 38580, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5852, Download: 43146, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6365, Download: 43847, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6383, Download: 43848, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6392, Download: 43854, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -299,7 +371,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6396, Download: 43876, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6403, Download: 43884, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6406, Download: 43888, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7776, Download: 57184, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7896, Download: 57947, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7916, Download: 58876, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -307,7 +378,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8366, Download: 63397, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8434, Download: 64510, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8555, Download: 67015, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15057, Download: 143589, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15061, Download: 149515, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15637, Download: 150101, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -340,7 +410,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 150, Download: 194, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 151, Download: 198, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 3976, Download: 29392, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4076, Download: 31561, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4408, Download: 32317, PublicKey: "xyz"}}, nil).Times(1),
@@ -348,7 +417,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4735, Download: 37798, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5505, Download: 38365, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5698, Download: 42931, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 513, Download: 701, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 531, Download: 702, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 540, Download: 708, PublicKey: "xyz"}}, nil).Times(1),
@@ -356,7 +424,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 544, Download: 730, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 551, Download: 738, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 554, Download: 742, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1370, Download: 13296, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1490, Download: 14059, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1510, Download: 14988, PublicKey: "xyz"}}, nil).Times(1),
@@ -364,7 +431,6 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1960, Download: 19509, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2028, Download: 20622, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2149, Download: 23127, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6502, Download: 76574, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6506, Download: 82500, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7082, Download: 83086, PublicKey: "xyz"}}, nil).Times(1),
@@ -374,7 +440,7 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7990, Download: 99794, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -422,7 +488,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 151, Download: 196, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 152, Download: 200, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 155, Download: 217, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4131, Download: 29609, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4231, Download: 31778, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4563, Download: 32534, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -430,7 +495,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 4890, Download: 38015, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5660, Download: 38582, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 5853, Download: 43148, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6366, Download: 43849, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6384, Download: 43850, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6393, Download: 43856, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -438,7 +502,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6397, Download: 43878, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6404, Download: 43886, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 6407, Download: 43890, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7777, Download: 57186, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7897, Download: 57949, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 7917, Download: 58878, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -446,7 +509,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8367, Download: 63399, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8435, Download: 64512, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 8556, Download: 67017, PublicKey: "xyz"}}).Return(nil).Times(1),
-
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15058, Download: 143591, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15062, Download: 149517, PublicKey: "xyz"}}).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 15638, Download: 150103, PublicKey: "xyz"}}).Return(nil).Times(1),
@@ -480,7 +542,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 150, Download: 194, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 151, Download: 198, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 3976, Download: 29392, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4076, Download: 31561, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4408, Download: 32317, PublicKey: "xyz"}}, nil).Times(1),
@@ -488,7 +549,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 4735, Download: 37798, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5505, Download: 38365, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 5698, Download: 42931, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 513, Download: 701, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 531, Download: 702, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 540, Download: 708, PublicKey: "xyz"}}, nil).Times(1),
@@ -496,7 +556,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 544, Download: 730, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 551, Download: 738, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 554, Download: 742, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1370, Download: 13296, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1490, Download: 14059, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1510, Download: 14988, PublicKey: "xyz"}}, nil).Times(1),
@@ -504,7 +563,6 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 1960, Download: 19509, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2028, Download: 20622, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 2149, Download: 23127, PublicKey: "xyz"}}, nil).Times(1),
-
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6502, Download: 76574, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 6506, Download: 82500, PublicKey: "xyz"}}, nil).Times(1),
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7082, Download: 83086, PublicKey: "xyz"}}, nil).Times(1),
@@ -514,7 +572,7 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 		readWGPeersUsage.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 7990, Download: 99794, PublicKey: "xyz"}}, nil).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
@@ -750,7 +808,7 @@ func TestEngineMultipleDynamicPeers(t *testing.T) {
 		).Times(1),
 	)
 
-	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
 
 	ticker := make(chan struct{})
 
