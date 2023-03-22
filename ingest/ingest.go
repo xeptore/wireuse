@@ -75,9 +75,11 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 			}
 		}
 
-		if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
-			// TODO: log error
-			continue // not gonna remove the restart-mark file as it might succeed in the next tick.
+		if len(peersUsage) > 0 {
+			if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
+				// TODO: log error
+				continue // not gonna remove the restart-mark file as it might succeed in the next tick.
+			}
 		}
 
 		// ignore the non-existing restart-mark file error in the removal operation

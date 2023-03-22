@@ -539,3 +539,239 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 	<-wait
 	require.Nil(t, runErr)
 }
+
+func TestEngineMultipleDynamicPeers(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+	store := mocks.NewMockStore(ctrl)
+
+	gomock.InOrder(
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+			map[string]ingest.PeerUsage{
+				"abc": {Upload: 25, Download: 65, PublicKey: "abc"},
+				"xyz": {Upload: 20, Download: 60, PublicKey: "xyz"},
+				"123": {Upload: 17, Download: 53, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+			map[string]ingest.PeerUsage{
+				"xyz": {Upload: 50, Download: 150, PublicKey: "xyz"},
+				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				"abc": {Upload: 128001692, Download: 186202004, PublicKey: "abc"},
+				"123": {Upload: 57, Download: 153, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+			map[string]ingest.PeerUsage{
+				"xyz": {Upload: 50, Download: 150, PublicKey: "xyz"},
+				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				"abc": {Upload: 128001692, Download: 186202004, PublicKey: "abc"},
+				"123": {Upload: 107, Download: 263, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+			map[string]ingest.PeerUsage{
+				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				"qwe": {Upload: 40, Download: 85, PublicKey: "qwe"},
+				"xyz": {Upload: 37 + 50, Download: 98 + 150, PublicKey: "xyz"},
+				"123": {Upload: 45 + 107, Download: 120 + 263, PublicKey: "123"},
+				"456": {Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				"abc": {Upload: 49 + 128001692, Download: 137 + 186202004, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
+	)
+
+	gomock.InOrder(
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 10, Download: 30, PublicKey: "xyz"},
+				{Upload: 15, Download: 35, PublicKey: "abc"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 20, Download: 60, PublicKey: "xyz"},
+				{Upload: 17, Download: 53, PublicKey: "123"},
+				{Upload: 25, Download: 65, PublicKey: "abc"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 6531511 + 25, Download: 55474931 + 65, PublicKey: "abc"},
+				{Upload: 12 + 20, Download: 33 + 60, PublicKey: "xyz"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 50, Download: 150, PublicKey: "xyz"},
+				{Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				{Upload: 128001692, Download: 186202004, PublicKey: "abc"},
+				{Upload: 57, Download: 153, PublicKey: "123"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 50 + 57, Download: 110 + 153, PublicKey: "123"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 20, Download: 40, PublicKey: "qwe"},
+				{Upload: 37 + 50, Download: 98 + 150, PublicKey: "xyz"},
+				{Upload: 45 + 57 + 50, Download: 120 + 110 + 153, PublicKey: "123"},
+				{Upload: 49 + 128001692, Download: 137 + 186202004, PublicKey: "abc"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 30, Download: 75, PublicKey: "qwe"},
+				{Upload: 53 + 107, Download: 132 + 263, PublicKey: "123"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 40, Download: 85, PublicKey: "qwe"},
+				{Upload: 37 + 50, Download: 98 + 150, PublicKey: "xyz"},
+				{Upload: 45 + 107, Download: 120 + 263, PublicKey: "123"},
+				{Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				{Upload: 49 + 128001692, Download: 137 + 186202004, PublicKey: "abc"},
+			},
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 203658612 + 124728866, Download: 220351578 + 155917550, PublicKey: "456"},
+				{Upload: 50 + 40, Download: 95 + 85, PublicKey: "qwe"},
+				{Upload: 76 + 37 + 50, Download: 168 + 98 + 150, PublicKey: "xyz"},
+			},
+		).Return(nil).Times(1),
+	)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(4)
+	gomock.InOrder(
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(2),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(2),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(3),
+		readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{1}, nil).Times(1),
+	)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	gomock.InOrder(
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 10, Download: 30, PublicKey: "xyz"},
+				{Upload: 15, Download: 35, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 20, Download: 60, PublicKey: "xyz"},
+				{Upload: 17, Download: 53, PublicKey: "123"},
+				{Upload: 25, Download: 65, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 6531511, Download: 55474931, PublicKey: "abc"},
+				{Upload: 12, Download: 33, PublicKey: "xyz"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 30, Download: 90, PublicKey: "xyz"},
+				{Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				{Upload: 128001667, Download: 186201939, PublicKey: "abc"},
+				{Upload: 40, Download: 100, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 50, Download: 110, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 20, Download: 40, PublicKey: "qwe"},
+				{Upload: 37, Download: 98, PublicKey: "xyz"},
+				{Upload: 45, Download: 120, PublicKey: "123"},
+				{Upload: 49, Download: 137, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 30, Download: 75, PublicKey: "qwe"},
+				{Upload: 53, Download: 132, PublicKey: "123"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 40, Download: 85, PublicKey: "qwe"},
+				{Upload: 37, Download: 98, PublicKey: "xyz"},
+				{Upload: 45, Download: 120, PublicKey: "123"},
+				{Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				{Upload: 49, Download: 137, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
+		readWGPeersUsage.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 203658612, Download: 220351578, PublicKey: "456"},
+				{Upload: 50, Download: 95, PublicKey: "qwe"},
+				{Upload: 76, Download: 168, PublicKey: "xyz"},
+			},
+			nil,
+		).Times(1),
+	)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store)
+
+	ticker := make(chan struct{})
+
+	var runErr error
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(ctx, ticker, "TODO")
+	}()
+
+	for i := 0; i < 10; i++ {
+		select {
+		case ticker <- struct{}{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	close(ticker)
+	<-wait
+	require.Nil(t, runErr)
+}
