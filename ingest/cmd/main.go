@@ -13,7 +13,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -35,7 +34,8 @@ var (
 func main() {
 	ctx := context.Background()
 
-	log := zerolog.New(log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}))
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro
+	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
 	if err := godotenv.Load(); nil != err {
 		if !errors.Is(err, os.ErrNotExist) {
