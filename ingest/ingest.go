@@ -53,44 +53,49 @@ func NewEngine(
 func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileName string) error {
 	var previousPeersUsage map[string]PeerUsage
 	for range tick {
-		peersUsage, err := e.wgPeers.Usage(ctx)
-		if nil != err {
-			e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
-			continue
-		}
-
-		mustDeleteRestartMarkFile := false
-		content, err := e.restartMarkFile.Read(restartMarkFileName)
-		if nil != err && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("failed to read restart-mark file: %w", err)
-		} else if content == [1]byte{1} {
-			previousPeersUsage, err = e.store.LoadBeforeRestartUsage(ctx)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			peersUsage, err := e.wgPeers.Usage(ctx)
 			if nil != err {
-				e.logger.Error().Err(err).Msg("failed to load before restart peers usage data")
+				e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
 				continue
 			}
-			mustDeleteRestartMarkFile = true
-		}
 
-		if nil != previousPeersUsage {
-			for i := 0; i < len(peersUsage); i++ {
-				if prevUsage, exists := previousPeersUsage[peersUsage[i].PublicKey]; exists {
-					peersUsage[i].Download += prevUsage.Download
-					peersUsage[i].Upload += prevUsage.Upload
+			mustDeleteRestartMarkFile := false
+			content, err := e.restartMarkFile.Read(restartMarkFileName)
+			if nil != err && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("failed to read restart-mark file: %w", err)
+			} else if content == [1]byte{1} {
+				previousPeersUsage, err = e.store.LoadBeforeRestartUsage(ctx)
+				if nil != err {
+					e.logger.Error().Err(err).Msg("failed to load before restart peers usage data")
+					continue
+				}
+				mustDeleteRestartMarkFile = true
+			}
+
+			if nil != previousPeersUsage {
+				for i := 0; i < len(peersUsage); i++ {
+					if prevUsage, exists := previousPeersUsage[peersUsage[i].PublicKey]; exists {
+						peersUsage[i].Download += prevUsage.Download
+						peersUsage[i].Upload += prevUsage.Upload
+					}
 				}
 			}
-		}
 
-		if len(peersUsage) > 0 {
-			if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
-				e.logger.Error().Err(err).Msg("failed to ingest peers usage data")
-				continue
+			if len(peersUsage) > 0 {
+				if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
+					e.logger.Error().Err(err).Msg("failed to ingest peers usage data")
+					continue
+				}
 			}
-		}
 
-		if mustDeleteRestartMarkFile {
-			if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
-				e.logger.Error().Err(err).Msg("failed to remove restart-mark file")
+			if mustDeleteRestartMarkFile {
+				if err := e.restartMarkFile.Remove(restartMarkFileName); nil != err && !errors.Is(err, os.ErrNotExist) {
+					e.logger.Error().Err(err).Msg("failed to remove restart-mark file")
+				}
 			}
 		}
 	}

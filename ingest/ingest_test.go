@@ -15,6 +15,58 @@ import (
 	"github.com/xeptore/wireuse/ingest/mocks"
 )
 
+func TestEngineContextCancellation(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ctrl, ctx := gomock.WithContext(ctx, t)
+
+	runCtx, cancelRunCtx := context.WithCancelCause(ctx)
+	var runErr error
+
+	store := mocks.NewMockStore(ctrl)
+	store.EXPECT().LoadBeforeRestartUsage(runCtx).Times(0)
+	store.EXPECT().IngestUsage(runCtx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}).Return(nil).Times(1)
+
+	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
+	readRestartMarkFile.EXPECT().Read("TODO").Return([1]byte{0}, os.ErrNotExist).Times(1)
+	readRestartMarkFile.EXPECT().Remove("TODO").Return(nil).Times(0)
+
+	readWGPeersUsage := mocks.NewMockWgPeers(ctrl)
+	readWGPeersUsage.EXPECT().Usage(runCtx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, nil).Times(1)
+
+	e := ingest.NewEngine(readRestartMarkFile, readWGPeersUsage, store, zerolog.New(io.Discard))
+
+	ticker := make(chan struct{})
+
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		runErr = e.Run(runCtx, ticker, "TODO")
+	}()
+
+	select {
+	case ticker <- struct{}{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+
+	cancelCause := errors.New("some error")
+	cancelRunCtx(cancelCause)
+	select {
+	case ticker <- struct{}{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+
+	close(ticker)
+	<-wait
+	require.NotNil(t, runErr)
+	require.ErrorIs(t, runErr, context.Canceled)
+	require.ErrorIs(t, context.Cause(runCtx), cancelCause)
+}
+
 func TestEngineSingleStaticPeer(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
