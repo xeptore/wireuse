@@ -62,7 +62,7 @@ jobs:
             maintainer=${{ github.repository_owner }}
             org.opencontainers.image.authors=${{ github.repository_owner }}
           flavor: |
-            latest=${{ github.ref_type != 'tag' && !startsWith(github.ref, 'refs/tags/') }}
+            latest=${{ github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/') }}
             prefix=,onlatest=false
             suffix=,onlatest=false
       - name: Setup Docker Buildx
