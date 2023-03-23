@@ -7,6 +7,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	gomock "github.com/golang/mock/gomock"
 	ingest "github.com/xeptore/wireuse/ingest"
@@ -36,17 +37,17 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 }
 
 // IngestUsage mocks base method.
-func (m *MockStore) IngestUsage(ctx context.Context, peersUsage []ingest.PeerUsage) error {
+func (m *MockStore) IngestUsage(ctx context.Context, peersUsage []ingest.PeerUsage, gatheredAt time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IngestUsage", ctx, peersUsage)
+	ret := m.ctrl.Call(m, "IngestUsage", ctx, peersUsage, gatheredAt)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // IngestUsage indicates an expected call of IngestUsage.
-func (mr *MockStoreMockRecorder) IngestUsage(ctx, peersUsage interface{}) *gomock.Call {
+func (mr *MockStoreMockRecorder) IngestUsage(ctx, peersUsage, gatheredAt interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IngestUsage", reflect.TypeOf((*MockStore)(nil).IngestUsage), ctx, peersUsage)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IngestUsage", reflect.TypeOf((*MockStore)(nil).IngestUsage), ctx, peersUsage, gatheredAt)
 }
 
 // LoadBeforeRestartUsage mocks base method.
@@ -88,12 +89,13 @@ func (m *MockWgPeers) EXPECT() *MockWgPeersMockRecorder {
 }
 
 // Usage mocks base method.
-func (m *MockWgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, error) {
+func (m *MockWgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Usage", ctx)
 	ret0, _ := ret[0].([]ingest.PeerUsage)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(time.Time)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // Usage indicates an expected call of Usage.

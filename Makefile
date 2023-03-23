@@ -18,3 +18,7 @@ build-clean: clean build
 test:
 	go test -trimpath -buildvcs=false -ldflags '-extldflags "-static" -s -w -buildid=' -race -failfast -vet=all -v ./...
 .PHONY: test
+
+gen:
+	$(MAKE) -C ./ingest
+.PHONY: gen
