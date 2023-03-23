@@ -16,7 +16,7 @@ build-clean: clean build
 .PHONY: build-clean
 
 test:
-	go test -trimpath -buildvcs=false -ldflags '-extldflags "-static" -s -w -buildid=' -race -failfast -vet=all -v ./...
+	go test -trimpath -buildvcs=false -ldflags '-extldflags "-static" -s -w -buildid=' -race -failfast -vet=all -covermode=atomic -coverprofile=coverage.out -v ./...
 .PHONY: test
 
 gen:
