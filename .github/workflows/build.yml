@@ -45,8 +45,13 @@ jobs:
           rm -rfv "$temp_dir"
       - name: Test
         run: make test
-      # - name: Upload Coverage to Codecov
-      #   uses: codecov/codecov-action@v3
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.out
+          flags: unittests
+          fail_ci_if_error: false
+          verbose: true
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
