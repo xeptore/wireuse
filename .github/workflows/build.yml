@@ -39,7 +39,8 @@ jobs:
       - name: UPX
         run: |
           wget https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-amd64_linux.tar.xz
-          tar -xvf upx-4.0.2-amd64_linux.tar.xz upx
+          tar -xvf upx-4.0.2-amd64_linux.tar.xz upx-4.0.2-amd64_linux/upx
+          mv ./upx-4.0.2-amd64_linux/upx .
           ./upx --no-color --mono --no-progress --ultra-brute --no-backup ${{ env.BIN }}
           ./upx --test ${{ env.BIN }}
       - name: Test
