@@ -1,6 +1,6 @@
 FROM docker.io/library/golang:1 AS build
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y libssl-dev pkg-config
+RUN apt-get update && apt-get upgrade -y && apt-get install -y libssl-dev pkg-config xz-utils
 
 RUN update-ca-certificates
 
@@ -20,11 +20,12 @@ COPY --chown=nonroot:nonroot . .
 
 RUN make build
 
-RUN wget https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-amd64_linux.tar.xz \
-    && tar -xvf upx-4.0.2-amd64_linux.tar.xz upx-4.0.2-amd64_linux/upx \
-    && mv ./upx-4.0.2-amd64_linux/upx . \
-    && ./upx --no-color --mono --no-progress --ultra-brute --no-backup ./bin/ingest \
-    && ./upx --test ./bin/ingest
+RUN set -ex && \
+    wget https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-amd64_linux.tar.xz && \
+    tar -xvf upx-4.0.2-amd64_linux.tar.xz upx-4.0.2-amd64_linux/upx && \
+    mv ./upx-4.0.2-amd64_linux/upx . && \
+    ./upx --no-color --mono --no-progress --ultra-brute --no-backup ./bin/ingest && \
+    ./upx --test ./bin/ingest
 
 FROM gcr.io/distroless/base-debian11:nonroot
 
