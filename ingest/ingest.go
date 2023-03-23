@@ -60,7 +60,9 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 		default:
 			peersUsage, gatheredAt, err := e.wgPeers.Usage(ctx)
 			if nil != err {
-				e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
+				if !errors.Is(err, os.ErrNotExist) {
+					e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
+				}
 				continue
 			}
 
