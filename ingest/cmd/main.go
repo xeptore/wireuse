@@ -167,11 +167,11 @@ func (m *storeMongo) LoadBeforeRestartUsage(ctx context.Context) (map[string]ing
 	return out, nil
 }
 
-func (m *storeMongo) IngestUsage(ctx context.Context, peersUsage []ingest.PeerUsage) error {
+func (m *storeMongo) IngestUsage(ctx context.Context, peersUsage []ingest.PeerUsage, gatheredAt time.Time) error {
 	models := funcutils.Map(peersUsage, func(p ingest.PeerUsage) mongo.WriteModel {
 		return mongo.NewUpdateOneModel().
 			SetFilter(bson.M{"publicKey": p.PublicKey}).
-			SetUpdate(bson.M{"$push": bson.M{"usage": bson.M{"upload": p.Upload, "download": p.Download}}}).
+			SetUpdate(bson.M{"$push": bson.M{"usage": bson.M{"upload": p.Upload, "download": p.Download, "at": gatheredAt.UnixMilli()}}}).
 			SetUpsert(true)
 	})
 	opts := options.BulkWrite().SetOrdered(false).SetBypassDocumentValidation(true)
@@ -186,10 +186,11 @@ type wgPeers struct {
 	ctrl *wgctrl.Client
 }
 
-func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, error) {
+func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, error) {
 	dev, err := wg.ctrl.Device(wgDeviceName)
+	gatheredAt := time.Now()
 	if nil != err {
-		return nil, err
+		return nil, gatheredAt, err
 	}
 
 	out := funcutils.Map(dev.Peers, func(p wgtypes.Peer) ingest.PeerUsage {
@@ -200,7 +201,7 @@ func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, error) {
 		}
 	})
 
-	return out, nil
+	return out, gatheredAt, nil
 }
 
 type restartMarkFileReadRemover struct{}

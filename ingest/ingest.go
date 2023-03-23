@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -17,11 +18,11 @@ type PeerUsage struct {
 
 type Store interface {
 	LoadBeforeRestartUsage(ctx context.Context) (map[string]PeerUsage, error)
-	IngestUsage(ctx context.Context, peersUsage []PeerUsage) error
+	IngestUsage(ctx context.Context, peersUsage []PeerUsage, gatheredAt time.Time) error
 }
 
 type WgPeers interface {
-	Usage(ctx context.Context) ([]PeerUsage, error)
+	Usage(ctx context.Context) (peersUsage []PeerUsage, gatheredAt time.Time, err error)
 }
 
 type RestartMarkFileReadRemover interface {
@@ -57,7 +58,7 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			peersUsage, err := e.wgPeers.Usage(ctx)
+			peersUsage, gatheredAt, err := e.wgPeers.Usage(ctx)
 			if nil != err {
 				e.logger.Error().Err(err).Msg("failed to get wireguard peers usage data")
 				continue
@@ -86,7 +87,7 @@ func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, restartMarkFileN
 			}
 
 			if len(peersUsage) > 0 {
-				if err := e.store.IngestUsage(ctx, peersUsage); nil != err {
+				if err := e.store.IngestUsage(ctx, peersUsage, gatheredAt); nil != err {
 					e.logger.Error().Err(err).Msg("failed to ingest peers usage data")
 					continue
 				}
