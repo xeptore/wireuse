@@ -27,11 +27,6 @@ jobs:
           go-version-file: go.mod
           cache: false
           check-latest: true
-      - name: Set Go Environment Variables
-        run: |
-          echo "GOOS=$(go env GOOS)" >> $GITHUB_ENV
-          echo "GOARCH=$(go env GOARCH)" >> $GITHUB_ENV
-          echo "BIN=./bin/ingest_$(go env GOOS)_$(go env GOARCH)" >> $GITHUB_ENV
       - name: Tidy
         run: make tidy
       - name: Build
@@ -41,20 +36,20 @@ jobs:
           wget https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-amd64_linux.tar.xz
           tar -xvf upx-4.0.2-amd64_linux.tar.xz upx-4.0.2-amd64_linux/upx
           mv ./upx-4.0.2-amd64_linux/upx .
-          ./upx --no-color --mono --no-progress --ultra-brute --no-backup ${{ env.BIN }}
-          ./upx --test ${{ env.BIN }}
+          ./upx --no-color --mono --no-progress --ultra-brute --no-backup ./bin/ingest
+          ./upx --test ./bin/ingest
       - name: Test
         run: make test
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: ingest
-          path: ${{ env.BIN }}
+          path: ./bin/ingest
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ env.BIN }}
+          files: ./bin/ingest
       - name: Docker Meta
         id: meta
         uses: docker/metadata-action@v4
@@ -92,9 +87,6 @@ jobs:
           context: .
           file: Dockerfile
           no-cache: true
-          build-args: |
-            GOOS=${{ env.GOOS }}
-            GOARCH=${{ env.GOARCH }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
         timeout-minutes: 10

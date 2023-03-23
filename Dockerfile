@@ -18,13 +18,13 @@ RUN go mod download -x
 
 COPY --chown=nonroot:nonroot . .
 
-ARG GOOS=linux
-
-ARG GOARCH=amd64
-
 RUN make build
 
-RUN mv ./bin/ingest_${GOOS}_${GOARCH} ./bin/ingest
+RUN wget https://github.com/upx/upx/releases/download/v4.0.2/upx-4.0.2-amd64_linux.tar.xz \
+    && tar -xvf upx-4.0.2-amd64_linux.tar.xz upx-4.0.2-amd64_linux/upx \
+    && mv ./upx-4.0.2-amd64_linux/upx . \
+    && ./upx --no-color --mono --no-progress --ultra-brute --no-backup ./bin/ingest \
+    && ./upx --test ./bin/ingest
 
 FROM gcr.io/distroless/base-debian11:nonroot
 
