@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,8 +28,9 @@ import (
 )
 
 var (
-	restartMarkFileName string
-	wgDeviceName        string
+	restartMarkFileName   string
+	wgDeviceName          string
+	wgPreDownDumpFileName string
 )
 
 func main() {
@@ -51,6 +53,7 @@ func main() {
 
 	flag.StringVar(&restartMarkFileName, "r", "", "restart-mark file name")
 	flag.StringVar(&wgDeviceName, "i", "", "wireguard interface")
+	flag.StringVar(&wgPreDownDumpFileName, "d", "", "wireguard pre-down dumped output file")
 
 	flag.Parse()
 	if nonFlagArgs := flag.Args(); len(nonFlagArgs) > 0 {
@@ -112,6 +115,19 @@ func main() {
 	go func() {
 		<-signals
 		cancel(stopSignalErr)
+	}()
+
+	go func() {
+		if wgPreDownDumpFileName == "" {
+			return
+		}
+
+		watcher, err := fsnotify.NewWatcher()
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to initialize wireguard pre-down dump file watcher")
+		}
+		defer watcher.Close()
+		watcher.Add("")
 	}()
 
 	timeTicker := time.NewTicker(5 * time.Second)

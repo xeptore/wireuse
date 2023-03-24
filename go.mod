@@ -3,6 +3,7 @@ module github.com/xeptore/wireuse
 go 1.20
 
 require (
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/golang/mock v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.29.0
@@ -34,6 +35,6 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	golang.zx2c4.com/wireguard v0.0.0-20230317141804-1417a47c8fa8 // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20230323173900-3a9e75374f43 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
