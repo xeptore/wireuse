@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
@@ -28,9 +27,8 @@ import (
 )
 
 var (
-	restartMarkFileName   string
-	wgDeviceName          string
-	wgPreDownDumpFileName string
+	restartMarkFileName string
+	wgDeviceName        string
 )
 
 func main() {
@@ -53,7 +51,6 @@ func main() {
 
 	flag.StringVar(&restartMarkFileName, "r", "", "restart-mark file name")
 	flag.StringVar(&wgDeviceName, "i", "", "wireguard interface")
-	flag.StringVar(&wgPreDownDumpFileName, "d", "", "wireguard pre-down dumped output file")
 
 	flag.Parse()
 	if nonFlagArgs := flag.Args(); len(nonFlagArgs) > 0 {
@@ -79,7 +76,9 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to verify database connectivity")
 	}
 	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		if err := client.Disconnect(disconnectCtx); err != nil {
 			log.Err(err).Msg("failed to disconnect from database")
 			return
 		}
@@ -110,24 +109,11 @@ func main() {
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT)
-	ctx, cancel := context.WithCancelCause(ctx)
+	runCtx, cancelEngineRun := context.WithCancelCause(ctx)
 	stopSignalErr := errors.New("stop signal received")
 	go func() {
 		<-signals
-		cancel(stopSignalErr)
-	}()
-
-	go func() {
-		if wgPreDownDumpFileName == "" {
-			return
-		}
-
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to initialize wireguard pre-down dump file watcher")
-		}
-		defer watcher.Close()
-		watcher.Add("")
+		cancelEngineRun(stopSignalErr)
 	}()
 
 	timeTicker := time.NewTicker(5 * time.Second)
@@ -142,8 +128,8 @@ func main() {
 	wp := wgPeers{wg}
 	store := storeMongo{collection}
 	engine := ingest.NewEngine(&rmf, &wp, &store, log)
-	if err := engine.Run(ctx, engineTicker, restartMarkFileName); nil != err {
-		if err := ctx.Err(); nil != err {
+	if err := engine.Run(runCtx, engineTicker, restartMarkFileName); nil != err {
+		if err := runCtx.Err(); nil != err {
 			if errors.Is(err, context.Canceled) {
 				if errors.Is(context.Cause(ctx), stopSignalErr) {
 					log.Info().Msg("root context was canceled due to receiving an interrupt signal")

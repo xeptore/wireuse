@@ -3,7 +3,6 @@ module github.com/xeptore/wireuse
 go 1.20
 
 require (
-	github.com/fsnotify/fsnotify v1.6.0
 	github.com/golang/mock v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.29.0
