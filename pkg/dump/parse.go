@@ -20,8 +20,8 @@ type Peer struct {
 	Endpoint                    *net.UDPAddr
 	AllowedIPs                  []net.IPNet
 	LastHandshakeTime           time.Time
-	ReceiveBytes                uint
-	TransmitBytes               uint
+	ReceiveBytes                uint64
+	TransmitBytes               uint64
 	PersistentKeepaliveInterval time.Duration
 }
 
@@ -125,8 +125,8 @@ func Parse(raw []byte) ([]Peer, error) {
 			Endpoint:                    endpoint,
 			AllowedIPs:                  allowedIPs,
 			LastHandshakeTime:           latestHandshakeTime,
-			ReceiveBytes:                uint(receiveBytes),
-			TransmitBytes:               uint(transmitBytes),
+			ReceiveBytes:                uint64(receiveBytes),
+			TransmitBytes:               uint64(transmitBytes),
 			PersistentKeepaliveInterval: time.Duration(persistentKeepaliveInterval),
 		})
 	}
