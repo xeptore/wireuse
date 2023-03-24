@@ -1,6 +1,8 @@
 package dump_test
 
 import (
+	"bufio"
+	"bytes"
 	_ "embed"
 	"net"
 	"net/netip"
@@ -13,8 +15,12 @@ import (
 	"github.com/xeptore/wireuse/pkg/dump"
 )
 
-//go:embed testdata/dump.txt
-var raw []byte
+var (
+	//go:embed testdata/dump.txt
+	rawValidDump []byte
+	//go:embed testdata/dump-invalid.txt
+	rawInvalidDump []byte
+)
 
 func mustParseKey(t *testing.T, s string) wgtypes.Key {
 	key, err := wgtypes.ParseKey(s)
@@ -45,8 +51,8 @@ func mustParseUnixTime(t *testing.T, u int64) time.Time {
 	return time.Unix(u, 0)
 }
 
-func TestParse(t *testing.T) {
-	peers, err := dump.Parse(raw)
+func TestParseValidDumpFile(t *testing.T) {
+	peers, err := dump.Parse(rawValidDump)
 	require.Nil(t, err)
 	require.NotNil(t, peers)
 	require.Equal(t, []dump.Peer{
@@ -740,5 +746,24 @@ func TestParse(t *testing.T) {
 			TransmitBytes:               349602820,
 			PersistentKeepaliveInterval: 0,
 		},
+		{
+			PublicKey:                   mustParseKey(t, "RFrjTKnZWr/CmI/XC+zgPeGJzbDGQhA9eOBb+ge90wA="),
+			PresharedKey:                mustParseKey(t, "uox3nW4W81djWoJEN/lgdrvjqtLnl36lhkJZcbSkwOM="),
+			Endpoint:                    mustParseUDPAddr(t, "5.232.204.179:10611"),
+			AllowedIPs:                  mustParseAllowedIPs(t, "10.0.0.113/32", "fdd0:438e:19ba:5069::71/128"),
+			LastHandshakeTime:           mustParseUnixTime(t, 1672307401),
+			ReceiveBytes:                10695096,
+			TransmitBytes:               349602820,
+			PersistentKeepaliveInterval: 10,
+		},
 	}, peers)
+}
+
+func TestParseInvalidDumpFile(t *testing.T) {
+	scanner := bufio.NewScanner(bytes.NewBuffer(rawInvalidDump))
+	for scanner.Scan() {
+		peers, err := dump.Parse(scanner.Bytes())
+		require.Nil(t, peers)
+		require.NotNil(t, err)
+	}
 }

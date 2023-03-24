@@ -67,10 +67,6 @@ func Parse(raw []byte) ([]Peer, error) {
 		var allowedIPs []net.IPNet
 		raw = splits[3]
 		rawAllowedIPs := strings.Split(raw, ",")
-		if len(rawAllowedIPs) < 1 {
-			return nil, fmt.Errorf("expected at least one allowed ip (%s): %v", raw, err)
-		}
-
 		for _, v := range rawAllowedIPs {
 			_, ipnet, err := net.ParseCIDR(v)
 			if nil != err {
@@ -85,7 +81,10 @@ func Parse(raw []byte) ([]Peer, error) {
 		if raw != "0" {
 			i, err := strconv.ParseInt(raw, 10, 64)
 			if nil != err {
-				return nil, fmt.Errorf("invalid latest handshake unit timestamp (%s): %v", raw, err)
+				return nil, fmt.Errorf("invalid latest handshake unix timestamp (%s): %v", raw, err)
+			}
+			if i < 0 {
+				return nil, fmt.Errorf("unexpected negative latest handshake unix timestamp value (%s)", raw)
 			}
 			latestHandshakeTime = time.Unix(i, 0)
 		}
@@ -111,6 +110,9 @@ func Parse(raw []byte) ([]Peer, error) {
 			i, err := strconv.ParseInt(raw, 10, 32)
 			if nil != err {
 				return 0, fmt.Errorf("invalid persistent keepalive interval (%s): %v", raw, err)
+			}
+			if i < 0 {
+				return 0, fmt.Errorf("unexpected negative persistent keepalive value (%s)", raw)
 			}
 
 			return time.Duration(i), nil
