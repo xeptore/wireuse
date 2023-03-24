@@ -85,6 +85,21 @@ func main() {
 	cs, _ := connstring.Parse(uri)
 	collection := client.Database(cs.Database).Collection(wgDeviceName)
 
+	indexModels := []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "publicKey", Value: "hashed"}},
+		},
+		{
+			Keys:    bson.D{{Key: "publicKey", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+	}
+	names, err := collection.Indexes().CreateMany(ctx, indexModels)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create database indexes")
+	}
+	log.Info().Strs("index_names", names).Msg("successfully inserted database indexes")
+
 	wg, err := wgctrl.New()
 	if nil != err {
 		log.Fatal().Err(err).Msg("failed to initialize wg control client")
@@ -115,7 +130,7 @@ func main() {
 		if err := ctx.Err(); nil != err {
 			if errors.Is(err, context.Canceled) {
 				if errors.Is(context.Cause(ctx), stopSignalErr) {
-					log.Info().Msg("root context was canceled due to receiving a interrupt signal")
+					log.Info().Msg("root context was canceled due to receiving an interrupt signal")
 					return
 				}
 
