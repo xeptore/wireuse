@@ -6,6 +6,7 @@
 ![Latest Tag](https://img.shields.io/github/v/tag/xeptore/wireuse?label=Latest%20Tag&sort=semver)
 ![Latest Release](https://img.shields.io/github/v/release/xeptore/wireuse?display_name=tag&label=Latest%20Release&sort=semver)
 ![Code Size](https://img.shields.io/github/languages/code-size/xeptore/wireuse?label=Code%20Size)
+[![Go Report Card](https://goreportcard.com/badge/github.com/xeptore/wireuse)](https://goreportcard.com/report/github.com/xeptore/wireuse)
 ![Latest Release Downloads](https://img.shields.io/github/downloads/xeptore/wireuse/latest/total?label=Downloads%40Latest)
 ![License](https://img.shields.io/github/license/xeptore/wireuse?label=License)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fxeptore%2Fwireuse.svg?type=small)](https://app.fossa.com/projects/git%2Bgithub.com%2Fxeptore%2Fwireuse?ref=badge_small)
