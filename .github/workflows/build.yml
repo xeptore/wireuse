@@ -1,5 +1,12 @@
 name: Build
 on:
+  pull_request:
+    types:
+      - edited
+      - reopened
+      - ready_for_review
+      - opened
+      - synchronize
   push:
     branches:
       - main
@@ -59,7 +66,7 @@ jobs:
           path: ./bin/ingest
       - name: Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && ${{ github.event_name != 'pull_request' }}
         with:
           files: ./bin/ingest
       - name: Docker Meta
@@ -94,7 +101,7 @@ jobs:
         id: docker_build_and_push
         uses: docker/build-push-action@v4
         with:
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           pull: true
           context: .
           file: Dockerfile
