@@ -4,7 +4,6 @@ on:
     types:
       - edited
       - reopened
-      - ready_for_review
       - opened
       - synchronize
   push:
