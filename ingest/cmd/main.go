@@ -118,7 +118,7 @@ func main() {
 		cancelEngineRun(stopSignalErr)
 	}()
 
-	wgFileEvents := make(chan ingest.WGFileEvent)
+	wgUpEvents, wgDownEvents := make(chan struct{}), make(chan ingest.WgDownEvent)
 	go func() {
 		log = log.With().Str("app", "watcher").Logger()
 		w, err := fsnotify.NewWatcher()
@@ -154,27 +154,26 @@ func main() {
 				}
 
 				if filename := filepath.Base(event.Name); strings.HasSuffix(filename, fmt.Sprintf("%s.up", wgDeviceName)) {
-					wgFileEvents <- ingest.WGFileEvent{Kind: ingest.WGFileEventKindUp, Name: event.Name}
+					wgUpEvents <- struct{}{}
 				} else if strings.HasSuffix(filename, fmt.Sprintf("%s.down", wgDeviceName)) {
-					wgFileEvents <- ingest.WGFileEvent{Kind: ingest.WGFileEventKindDown, Name: event.Name}
+					wgDownEvents <- ingest.WgDownEvent{ChangedAt: time.Now(), FileName: event.Name}
 				}
 			}
 		}
 	}()
 
-	timeTicker := time.NewTicker(5 * time.Second)
-	engineTicker := make(chan struct{})
+	ticker := make(chan struct{})
 	go func() {
+		timeTicker := time.NewTicker(5 * time.Second)
 		for range timeTicker.C {
-			engineTicker <- struct{}{}
+			ticker <- struct{}{}
 		}
 	}()
 
-	rmf := restartMarkFileReadRemover{}
 	wp := wgPeers{wg}
 	store := storeMongo{collection}
-	engine := ingest.NewEngine(&rmf, &wp, &store, log.With().Str("app", "engine").Logger())
-	if err := engine.Run(runCtx, engineTicker, wgFileEvents); nil != err {
+	engine := ingest.NewEngine(&wp, &store, log.With().Str("app", "engine").Logger())
+	if err := engine.Run(runCtx, ticker, wgUpEvents, wgDownEvents); nil != err {
 		if err := runCtx.Err(); nil != err {
 			if errors.Is(err, context.Canceled) {
 				if errors.Is(context.Cause(runCtx), stopSignalErr) {
@@ -265,31 +264,4 @@ func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, er
 	})
 
 	return out, gatheredAt, nil
-}
-
-type restartMarkFileReadRemover struct{}
-
-func (*restartMarkFileReadRemover) Read(filename string) ([1]byte, error) {
-	file, err := os.Open(watchDir)
-	if nil != err {
-		return [1]byte{0}, fmt.Errorf("failed to open restart-mark file: %w", err)
-	}
-
-	buf := make([]byte, 1)
-	n, err := file.Read(buf)
-	if nil != err {
-		return [1]byte{0}, fmt.Errorf("failed to read first byte of restart-mark file: %w", err)
-	}
-	if n > 1 {
-		return [1]byte{0}, fmt.Errorf("expected to read at most 1 byte from file read: %d", n)
-	}
-	if n == 0 {
-		return [1]byte{0}, nil
-	}
-
-	return [1]byte{buf[0]}, nil
-}
-
-func (*restartMarkFileReadRemover) Remove(filename string) error {
-	return os.Remove(filename)
 }

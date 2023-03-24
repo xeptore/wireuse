@@ -27,7 +27,7 @@ func TestEngineContextCancellation(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(runCtx).Times(0)
+	store.EXPECT().LoadUsage(runCtx).Times(0)
 	store.EXPECT().IngestUsage(runCtx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1)
 
 	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
@@ -78,7 +78,7 @@ func TestEngineSingleStaticPeer(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	store.EXPECT().LoadUsage(ctx).Times(0)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -144,7 +144,7 @@ func TestEngineSingleStaticPeerUnavailableWgServer(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	store.EXPECT().LoadUsage(ctx).Times(0)
 	store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1)
 
 	readRestartMarkFile := mocks.NewMockRestartMarkFileReadRemover(ctrl)
@@ -193,7 +193,7 @@ func TestEngineSingleStaticPeerWithWgReadPeersUsageFailure(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	store.EXPECT().LoadUsage(ctx).Times(0)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -257,7 +257,7 @@ func TestEngineSingleStaticPeerWithIngestFailure(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	store.EXPECT().LoadUsage(ctx).Times(0)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime).Return(errors.New("unknown error")).Times(1),
@@ -323,7 +323,7 @@ func TestEngineSingleStaticPeerWithRestartMarkFileReadFailure(t *testing.T) {
 	gatherTime := time.Now()
 
 	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadBeforeRestartUsage(ctx).Times(0)
+	store.EXPECT().LoadUsage(ctx).Times(0)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -389,12 +389,12 @@ func TestEngineSingleStaticPeerWithRestartsAndLoadBeforeRestartUsageFailure(t *t
 
 	store := mocks.NewMockStore(ctrl)
 	gomock.InOrder(
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10, Download: 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("network error")).Times(2),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10, Download: 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("network error")).Times(2),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
 	)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -465,10 +465,10 @@ func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 
 	store := mocks.NewMockStore(ctrl)
 	gomock.InOrder(
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5852, Download: 43146, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6406, Download: 43888, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8555, Download: 67015, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 154, Download: 215, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5852, Download: 43146, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6406, Download: 43888, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8555, Download: 67015, PublicKey: "xyz"}}, nil).Times(1),
 	)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 120, Download: 169, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -597,11 +597,11 @@ func TestEngineSingleStaticPeerWithRestartStartingWithRestartMarkFileExistence(t
 
 	store := mocks.NewMockStore(ctrl)
 	gomock.InOrder(
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 1, Download: 2, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 155, Download: 217, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5853, Download: 43148, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6407, Download: 43890, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8556, Download: 67017, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 1, Download: 2, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 155, Download: 217, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 5853, Download: 43148, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 6407, Download: 43890, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 8556, Download: 67017, PublicKey: "xyz"}}, nil).Times(1),
 	)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 121, Download: 171, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
@@ -730,7 +730,7 @@ func TestEngineMultipleDynamicPeers(t *testing.T) {
 
 	store := mocks.NewMockStore(ctrl)
 	gomock.InOrder(
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+		store.EXPECT().LoadUsage(ctx).Return(
 			map[string]ingest.PeerUsage{
 				"abc": {Upload: 25, Download: 65, PublicKey: "abc"},
 				"xyz": {Upload: 20, Download: 60, PublicKey: "xyz"},
@@ -738,7 +738,7 @@ func TestEngineMultipleDynamicPeers(t *testing.T) {
 			},
 			nil,
 		).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+		store.EXPECT().LoadUsage(ctx).Return(
 			map[string]ingest.PeerUsage{
 				"xyz": {Upload: 50, Download: 150, PublicKey: "xyz"},
 				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
@@ -747,7 +747,7 @@ func TestEngineMultipleDynamicPeers(t *testing.T) {
 			},
 			nil,
 		).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+		store.EXPECT().LoadUsage(ctx).Return(
 			map[string]ingest.PeerUsage{
 				"xyz": {Upload: 50, Download: 150, PublicKey: "xyz"},
 				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
@@ -756,7 +756,7 @@ func TestEngineMultipleDynamicPeers(t *testing.T) {
 			},
 			nil,
 		).Times(1),
-		store.EXPECT().LoadBeforeRestartUsage(ctx).Return(
+		store.EXPECT().LoadUsage(ctx).Return(
 			map[string]ingest.PeerUsage{
 				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
 				"qwe": {Upload: 40, Download: 85, PublicKey: "qwe"},
