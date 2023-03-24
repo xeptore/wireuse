@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,8 +29,8 @@ import (
 )
 
 var (
-	restartMarkFileName string
-	wgDeviceName        string
+	watchDir     string
+	wgDeviceName string
 )
 
 func main() {
@@ -49,15 +51,15 @@ func main() {
 		log.Fatal().Msg("TZ environment variable must be set to UTC")
 	}
 
-	flag.StringVar(&restartMarkFileName, "r", "", "restart-mark file name")
+	flag.StringVar(&watchDir, "w", "", "directory path to watch for wireguard device up and dump files")
 	flag.StringVar(&wgDeviceName, "i", "", "wireguard interface")
 
 	flag.Parse()
 	if nonFlagArgs := flag.Args(); len(nonFlagArgs) > 0 {
 		log.Fatal().Msgf("expected no additional flags, got: %s", strings.Join(nonFlagArgs, ","))
 	}
-	if restartMarkFileName == "" {
-		log.Fatal().Msg("restart-mark file name option is required and cannot be empty")
+	if watchDir == "" {
+		log.Fatal().Msg("directory path to watch for wireguard device up and dump files option is required and cannot be empty")
 	}
 	if wgDeviceName == "" {
 		log.Fatal().Msg("wireguard device name option is required and cannot be empty")
@@ -116,6 +118,50 @@ func main() {
 		cancelEngineRun(stopSignalErr)
 	}()
 
+	wgFileEvents := make(chan ingest.WGFileEvent)
+	go func() {
+		log = log.With().Str("app", "watcher").Logger()
+		w, err := fsnotify.NewWatcher()
+		if nil != err {
+			log.Fatal().Err(err).Msg("failed to initialize")
+		}
+		if err := w.Add(watchDir); nil != err {
+			log.Fatal().Err(err).Msg("failed to add directory")
+		}
+		log.Debug().Str("dir", watchDir).Msg("started watching directory")
+		for {
+			select {
+			case <-runCtx.Done():
+				log.Info().Msg("existing loop due to context done")
+				return
+			case err, open := <-w.Errors:
+				if !open {
+					log.Info().Msg("exiting loop due to closure")
+					return
+				}
+				if nil != err {
+					log.Error().Err(err).Msg("received error")
+					return
+				}
+			case event, open := <-w.Events:
+				if !open {
+					log.Info().Msg("exiting loop due to closure")
+					return
+				}
+
+				if !event.Has(fsnotify.Create) && !event.Has(fsnotify.Write) {
+					log.Debug().Msg("ignoring event with irrelevant op")
+				}
+
+				if filename := filepath.Base(event.Name); strings.HasSuffix(filename, fmt.Sprintf("%s.up", wgDeviceName)) {
+					wgFileEvents <- ingest.WGFileEvent{Kind: ingest.WGFileEventKindUp, Name: event.Name}
+				} else if strings.HasSuffix(filename, fmt.Sprintf("%s.down", wgDeviceName)) {
+					wgFileEvents <- ingest.WGFileEvent{Kind: ingest.WGFileEventKindDown, Name: event.Name}
+				}
+			}
+		}
+	}()
+
 	timeTicker := time.NewTicker(5 * time.Second)
 	engineTicker := make(chan struct{})
 	go func() {
@@ -127,11 +173,11 @@ func main() {
 	rmf := restartMarkFileReadRemover{}
 	wp := wgPeers{wg}
 	store := storeMongo{collection}
-	engine := ingest.NewEngine(&rmf, &wp, &store, log)
-	if err := engine.Run(runCtx, engineTicker, restartMarkFileName); nil != err {
+	engine := ingest.NewEngine(&rmf, &wp, &store, log.With().Str("app", "engine").Logger())
+	if err := engine.Run(runCtx, engineTicker, wgFileEvents); nil != err {
 		if err := runCtx.Err(); nil != err {
 			if errors.Is(err, context.Canceled) {
-				if errors.Is(context.Cause(ctx), stopSignalErr) {
+				if errors.Is(context.Cause(runCtx), stopSignalErr) {
 					log.Info().Msg("root context was canceled due to receiving an interrupt signal")
 					return
 				}
@@ -153,12 +199,12 @@ type storeMongo struct {
 	collection *mongo.Collection
 }
 
-func (m *storeMongo) LoadBeforeRestartUsage(ctx context.Context) (map[string]ingest.PeerUsage, error) {
+func (m *storeMongo) LoadUsage(ctx context.Context) (map[string]ingest.PeerUsage, error) {
 	cursor, err := m.collection.Aggregate(ctx, bson.A{
 		bson.M{"$project": bson.M{"lastUsage": bson.M{"$last": "$usage"}, "_id": 0, "publicKey": 1}},
 	})
 	if nil != err {
-		return nil, fmt.Errorf("failed to query before restart last usage data: %v", err)
+		return nil, fmt.Errorf("failed to query last usage data: %v", err)
 	}
 
 	var results []struct {
@@ -224,7 +270,7 @@ func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, er
 type restartMarkFileReadRemover struct{}
 
 func (*restartMarkFileReadRemover) Read(filename string) ([1]byte, error) {
-	file, err := os.Open(restartMarkFileName)
+	file, err := os.Open(watchDir)
 	if nil != err {
 		return [1]byte{0}, fmt.Errorf("failed to open restart-mark file: %w", err)
 	}

@@ -2,9 +2,9 @@ package dump
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"strconv"
@@ -25,10 +25,10 @@ type Peer struct {
 	PersistentKeepaliveInterval time.Duration
 }
 
-func Parse(raw []byte) ([]Peer, error) {
+func Parse(r io.Reader) ([]Peer, error) {
 	var out []Peer
 
-	scanner := bufio.NewScanner(bytes.NewBuffer(raw))
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		splits := strings.SplitN(scanner.Text(), "\t", 8)
 		if len(splits) != 8 {

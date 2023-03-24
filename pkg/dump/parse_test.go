@@ -52,7 +52,7 @@ func mustParseUnixTime(t *testing.T, u int64) time.Time {
 }
 
 func TestParseValidDumpFile(t *testing.T) {
-	peers, err := dump.Parse(rawValidDump)
+	peers, err := dump.Parse(bytes.NewBuffer(rawValidDump))
 	require.Nil(t, err)
 	require.NotNil(t, peers)
 	require.Equal(t, []dump.Peer{
@@ -762,7 +762,7 @@ func TestParseValidDumpFile(t *testing.T) {
 func TestParseInvalidDumpFile(t *testing.T) {
 	scanner := bufio.NewScanner(bytes.NewBuffer(rawInvalidDump))
 	for scanner.Scan() {
-		peers, err := dump.Parse(scanner.Bytes())
+		peers, err := dump.Parse(bytes.NewBuffer(scanner.Bytes()))
 		require.Nil(t, peers)
 		require.NotNil(t, err)
 	}
