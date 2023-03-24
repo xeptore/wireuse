@@ -226,8 +226,8 @@ func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, er
 
 	out := funcutils.Map(dev.Peers, func(p wgtypes.Peer) ingest.PeerUsage {
 		return ingest.PeerUsage{
-			Upload:    uint(p.TransmitBytes),
-			Download:  uint(p.ReceiveBytes),
+			Upload:    uint(p.ReceiveBytes),
+			Download:  uint(p.TransmitBytes),
 			PublicKey: p.PublicKey.String(),
 		}
 	})
