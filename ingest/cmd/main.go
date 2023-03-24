@@ -118,7 +118,7 @@ func main() {
 		cancelEngineRun(stopSignalErr)
 	}()
 
-	wgUpEvents, wgDownEvents := make(chan struct{}), make(chan ingest.WgDownEvent)
+	wgUpEvents, wgDownEvents := make(chan ingest.WgUpEvent), make(chan ingest.WgDownEvent)
 	go func() {
 		log = log.With().Str("app", "watcher").Logger()
 		w, err := fsnotify.NewWatcher()
@@ -154,7 +154,7 @@ func main() {
 				}
 
 				if filename := filepath.Base(event.Name); strings.HasSuffix(filename, fmt.Sprintf("%s.up", wgDeviceName)) {
-					wgUpEvents <- struct{}{}
+					wgUpEvents <- ingest.WgUpEvent{}
 				} else if strings.HasSuffix(filename, fmt.Sprintf("%s.down", wgDeviceName)) {
 					wgDownEvents <- ingest.WgDownEvent{ChangedAt: time.Now(), FileName: event.Name}
 				}
@@ -162,11 +162,11 @@ func main() {
 		}
 	}()
 
-	ticker := make(chan struct{})
+	ticker := make(chan ingest.None)
 	go func() {
 		timeTicker := time.NewTicker(5 * time.Second)
 		for range timeTicker.C {
-			ticker <- struct{}{}
+			ticker <- ingest.None{}
 		}
 	}()
 

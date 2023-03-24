@@ -11,6 +11,10 @@ import (
 	"github.com/xeptore/wireuse/pkg/funcutils"
 )
 
+type None struct{}
+
+type WgUpEvent struct{}
+
 type WgDownEvent struct {
 	ChangedAt time.Time
 	FileName  string
@@ -45,7 +49,7 @@ func NewEngine(wgPeers WgPeers, store Store, logger zerolog.Logger) Engine {
 	}
 }
 
-func (e *Engine) Run(ctx context.Context, tick <-chan struct{}, wgUpEvents <-chan struct{}, wgDownEvents <-chan WgDownEvent) error {
+func (e *Engine) Run(ctx context.Context, tick <-chan None, wgUpEvents <-chan WgUpEvent, wgDownEvents <-chan WgDownEvent) error {
 	var previousPeersUsage map[string]PeerUsage
 	var mustLoadUsage bool
 loop:
