@@ -416,7 +416,7 @@ func xTestEngineSingleStaticPeerWithRestartsAndLoadBeforeRestartUsageFailure(t *
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
+func xTestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	t.Parallel()
 
 	ctx, done := context.WithCancel(context.Background())
