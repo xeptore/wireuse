@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,8 +29,8 @@ import (
 )
 
 var (
-	restartMarkFileName string
-	wgDeviceName        string
+	watchDir     string
+	wgDeviceName string
 )
 
 func main() {
@@ -49,15 +51,15 @@ func main() {
 		log.Fatal().Msg("TZ environment variable must be set to UTC")
 	}
 
-	flag.StringVar(&restartMarkFileName, "r", "", "restart-mark file name")
+	flag.StringVar(&watchDir, "w", "", "directory path to watch for wireguard device up and dump files")
 	flag.StringVar(&wgDeviceName, "i", "", "wireguard interface")
 
 	flag.Parse()
 	if nonFlagArgs := flag.Args(); len(nonFlagArgs) > 0 {
 		log.Fatal().Msgf("expected no additional flags, got: %s", strings.Join(nonFlagArgs, ","))
 	}
-	if restartMarkFileName == "" {
-		log.Fatal().Msg("restart-mark file name option is required and cannot be empty")
+	if watchDir == "" {
+		log.Fatal().Msg("directory path to watch for wireguard device up and dump files option is required and cannot be empty")
 	}
 	if wgDeviceName == "" {
 		log.Fatal().Msg("wireguard device name option is required and cannot be empty")
@@ -76,7 +78,9 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to verify database connectivity")
 	}
 	defer func() {
-		if err := client.Disconnect(ctx); err != nil {
+		disconnectCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		if err := client.Disconnect(disconnectCtx); err != nil {
 			log.Err(err).Msg("failed to disconnect from database")
 			return
 		}
@@ -107,29 +111,72 @@ func main() {
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT)
-	ctx, cancel := context.WithCancelCause(ctx)
+	runCtx, cancelEngineRun := context.WithCancelCause(ctx)
 	stopSignalErr := errors.New("stop signal received")
 	go func() {
 		<-signals
-		cancel(stopSignalErr)
+		cancelEngineRun(stopSignalErr)
 	}()
 
-	timeTicker := time.NewTicker(5 * time.Second)
-	engineTicker := make(chan struct{})
+	wgUpEvents, wgDownEvents := make(chan ingest.WgUpEvent), make(chan ingest.WgDownEvent)
 	go func() {
-		for range timeTicker.C {
-			engineTicker <- struct{}{}
+		log = log.With().Str("app", "watcher").Logger()
+		w, err := fsnotify.NewWatcher()
+		if nil != err {
+			log.Fatal().Err(err).Msg("failed to initialize")
+		}
+		if err := w.Add(watchDir); nil != err {
+			log.Fatal().Err(err).Msg("failed to add directory")
+		}
+		log.Debug().Str("dir", watchDir).Msg("started watching directory")
+		for {
+			select {
+			case <-runCtx.Done():
+				log.Info().Msg("existing loop due to context done")
+				return
+			case err, open := <-w.Errors:
+				if !open {
+					log.Info().Msg("exiting loop due to closure")
+					return
+				}
+				if nil != err {
+					log.Error().Err(err).Msg("received error")
+					return
+				}
+			case event, open := <-w.Events:
+				if !open {
+					log.Info().Msg("exiting loop due to closure")
+					return
+				}
+
+				if !event.Has(fsnotify.Create) && !event.Has(fsnotify.Write) {
+					log.Debug().Msg("ignoring event with irrelevant op")
+				}
+
+				if filename := filepath.Base(event.Name); strings.HasSuffix(filename, fmt.Sprintf("%s.up", wgDeviceName)) {
+					wgUpEvents <- ingest.WgUpEvent{}
+				} else if strings.HasSuffix(filename, fmt.Sprintf("%s.down", wgDeviceName)) {
+					wgDownEvents <- ingest.WgDownEvent{ChangedAt: time.Now(), FileName: event.Name}
+				}
+			}
 		}
 	}()
 
-	rmf := restartMarkFileReadRemover{}
+	ticker := make(chan ingest.None)
+	go func() {
+		timeTicker := time.NewTicker(5 * time.Second)
+		for range timeTicker.C {
+			ticker <- ingest.None{}
+		}
+	}()
+
 	wp := wgPeers{wg}
 	store := storeMongo{collection}
-	engine := ingest.NewEngine(&rmf, &wp, &store, log)
-	if err := engine.Run(ctx, engineTicker, restartMarkFileName); nil != err {
-		if err := ctx.Err(); nil != err {
+	engine := ingest.NewEngine(&wp, &store, log.With().Str("app", "engine").Logger())
+	if err := engine.Run(runCtx, ticker, wgUpEvents, wgDownEvents); nil != err {
+		if err := runCtx.Err(); nil != err {
 			if errors.Is(err, context.Canceled) {
-				if errors.Is(context.Cause(ctx), stopSignalErr) {
+				if errors.Is(context.Cause(runCtx), stopSignalErr) {
 					log.Info().Msg("root context was canceled due to receiving an interrupt signal")
 					return
 				}
@@ -151,12 +198,12 @@ type storeMongo struct {
 	collection *mongo.Collection
 }
 
-func (m *storeMongo) LoadBeforeRestartUsage(ctx context.Context) (map[string]ingest.PeerUsage, error) {
+func (m *storeMongo) LoadUsage(ctx context.Context) (map[string]ingest.PeerUsage, error) {
 	cursor, err := m.collection.Aggregate(ctx, bson.A{
 		bson.M{"$project": bson.M{"lastUsage": bson.M{"$last": "$usage"}, "_id": 0, "publicKey": 1}},
 	})
 	if nil != err {
-		return nil, fmt.Errorf("failed to query before restart last usage data: %v", err)
+		return nil, fmt.Errorf("failed to query last usage data: %v", err)
 	}
 
 	var results []struct {
@@ -210,38 +257,11 @@ func (wg *wgPeers) Usage(ctx context.Context) ([]ingest.PeerUsage, time.Time, er
 
 	out := funcutils.Map(dev.Peers, func(p wgtypes.Peer) ingest.PeerUsage {
 		return ingest.PeerUsage{
-			Upload:    uint(p.TransmitBytes),
-			Download:  uint(p.ReceiveBytes),
+			Upload:    uint(p.ReceiveBytes),
+			Download:  uint(p.TransmitBytes),
 			PublicKey: p.PublicKey.String(),
 		}
 	})
 
 	return out, gatheredAt, nil
-}
-
-type restartMarkFileReadRemover struct{}
-
-func (*restartMarkFileReadRemover) Read(filename string) ([1]byte, error) {
-	file, err := os.Open(restartMarkFileName)
-	if nil != err {
-		return [1]byte{0}, fmt.Errorf("failed to open restart-mark file: %w", err)
-	}
-
-	buf := make([]byte, 1)
-	n, err := file.Read(buf)
-	if nil != err {
-		return [1]byte{0}, fmt.Errorf("failed to read first byte of restart-mark file: %w", err)
-	}
-	if n > 1 {
-		return [1]byte{0}, fmt.Errorf("expected to read at most 1 byte from file read: %d", n)
-	}
-	if n == 0 {
-		return [1]byte{0}, nil
-	}
-
-	return [1]byte{buf[0]}, nil
-}
-
-func (*restartMarkFileReadRemover) Remove(filename string) error {
-	return os.Remove(filename)
 }
