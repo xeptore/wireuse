@@ -294,7 +294,7 @@ func TestEngineSingleStaticPeerWithIngestFailure(t *testing.T) {
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func xTestEngineSingleStaticPeerWithRestartsAndLoadUsageFailure(t *testing.T) {
+func TestEngineSingleStaticPeerWithRestartsAndLoadUsageFailure(t *testing.T) {
 	t.Parallel()
 	ctx, done := context.WithCancel(context.Background())
 	ctrl, ctx := gomock.WithContext(ctx, t)
@@ -304,19 +304,21 @@ func xTestEngineSingleStaticPeerWithRestartsAndLoadUsageFailure(t *testing.T) {
 	store := mocks.NewMockStore(ctrl)
 	gomock.InOrder(
 		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10, Download: 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(2),
 		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("network error")).Times(2),
-		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
-		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("network error")).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 30 + 10 + 10, Download: 90 + 30 + 80, PublicKey: "xyz"}}, nil).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(nil, errors.New("unknown error")).Times(3),
+		store.EXPECT().LoadUsage(ctx).Return(map[string]ingest.PeerUsage{"xyz": {Upload: 120, Download: 410, PublicKey: "xyz"}}, nil).Times(1),
 	)
 	gomock.InOrder(
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10 + 10, Download: 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30 + 10 + 10, Download: 90 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40 + 10 + 10, Download: 120 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50 + 10 + 10, Download: 150 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 80 + 50 + 10 + 10, Download: 240 + 150 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 90 + 50 + 10 + 10, Download: 270 + 150 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40 + 30 + 10 + 10, Download: 120 + 90 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50 + 30 + 10 + 10, Download: 150 + 90 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60 + 30 + 10 + 10, Download: 180 + 90 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 70 + 30 + 10 + 10, Download: 210 + 90 + 30 + 80, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 100 + 120, Download: 300 + 410, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
 	)
 
 	wgPeers := mocks.NewMockWgPeers(ctrl)
@@ -347,12 +349,75 @@ func xTestEngineSingleStaticPeerWithRestartsAndLoadUsageFailure(t *testing.T) {
 		runErr = e.Run(ctx, ticker, wgUpEvents, wgDownEvents)
 	}()
 
-	for i := 0; i < 10; i++ {
-		select {
-		case ticker <- ingest.None{}:
-		case <-wait:
-			t.Fatal("unexpected engine run termination")
-		}
+	select {
+	case wgUpEvents <- ingest.WgUpEvent{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case wgUpEvents <- ingest.WgUpEvent{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case wgUpEvents <- ingest.WgUpEvent{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case wgUpEvents <- ingest.WgUpEvent{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
 	}
 
 	done()
