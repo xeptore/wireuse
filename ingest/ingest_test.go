@@ -688,7 +688,7 @@ func TestEngineSingleStaticPeerWithRestartsAndStartingAfterWgRestart(t *testing.
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func xTestEngineMultipleDynamicPeers(t *testing.T) {
+func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 	t.Parallel()
 
 	ctx, done := context.WithCancel(context.Background())
