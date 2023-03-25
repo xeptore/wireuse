@@ -294,63 +294,7 @@ func TestEngineSingleStaticPeerWithIngestFailure(t *testing.T) {
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func xTestEngineSingleStaticPeerWithRestartMarkFileReadFailure(t *testing.T) {
-	t.Parallel()
-	ctx, done := context.WithCancel(context.Background())
-	ctrl, ctx := gomock.WithContext(ctx, t)
-
-	gatherTime := time.Now()
-
-	store := mocks.NewMockStore(ctrl)
-	store.EXPECT().LoadUsage(ctx).Times(0)
-	gomock.InOrder(
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-		store.EXPECT().IngestUsage(ctx, []ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, gatherTime).Return(nil).Times(1),
-	)
-
-	wgPeers := mocks.NewMockWgPeers(ctrl)
-	gomock.InOrder(
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 10, Download: 30, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 20, Download: 60, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 30, Download: 90, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 40, Download: 120, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 50, Download: 150, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 60, Download: 180, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-		wgPeers.EXPECT().Usage(ctx).Return([]ingest.PeerUsage{{Upload: 70, Download: 210, PublicKey: "xyz"}}, gatherTime, nil).Times(1),
-	)
-
-	e := ingest.NewEngine(wgPeers, store, zerolog.New(io.Discard))
-
-	ticker := make(chan ingest.None)
-	wgUpEvents, wgDownEvents := make(chan ingest.WgUpEvent), make(chan ingest.WgDownEvent)
-
-	var runErr error
-	wait := make(chan struct{})
-	go func() {
-		defer func() {
-			wait <- struct{}{}
-		}()
-		runErr = e.Run(ctx, ticker, wgUpEvents, wgDownEvents)
-	}()
-
-	for i := 0; i < 7; i++ {
-		select {
-		case ticker <- ingest.None{}:
-		case <-wait:
-			t.Fatal("unexpected engine run termination")
-		}
-	}
-
-	done()
-	<-wait
-	require.ErrorIs(t, runErr, os.ErrPermission)
-}
-
-func xTestEngineSingleStaticPeerWithRestartsAndLoadBeforeRestartUsageFailure(t *testing.T) {
+func xTestEngineSingleStaticPeerWithRestartsAndLoadUsageFailure(t *testing.T) {
 	t.Parallel()
 	ctx, done := context.WithCancel(context.Background())
 	ctrl, ctx := gomock.WithContext(ctx, t)
@@ -416,7 +360,7 @@ func xTestEngineSingleStaticPeerWithRestartsAndLoadBeforeRestartUsageFailure(t *
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func xTestEngineSingleStaticPeerWithRestart(t *testing.T) {
+func TestEngineSingleStaticPeerWithRestart(t *testing.T) {
 	t.Parallel()
 
 	ctx, done := context.WithCancel(context.Background())
@@ -522,7 +466,23 @@ func xTestEngineSingleStaticPeerWithRestart(t *testing.T) {
 		runErr = e.Run(ctx, ticker, wgUpEvents, wgDownEvents)
 	}()
 
-	for i := 0; i < 35; i++ {
+	for i := 0; i < 4; i++ {
+		for i := 0; i < 7; i++ {
+			select {
+			case ticker <- ingest.None{}:
+			case <-wait:
+				t.Fatal("unexpected engine run termination")
+			}
+		}
+
+		select {
+		case wgUpEvents <- ingest.WgUpEvent{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+
+	for i := 0; i < 7; i++ {
 		select {
 		case ticker <- ingest.None{}:
 		case <-wait:
