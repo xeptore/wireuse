@@ -688,7 +688,7 @@ func TestEngineSingleStaticPeerWithRestartsAndStartingAfterWgRestart(t *testing.
 	require.ErrorIs(t, runErr, context.Canceled)
 }
 
-func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
+func TestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 	t.Parallel()
 
 	ctx, done := context.WithCancel(context.Background())
@@ -720,21 +720,21 @@ func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
 				"abc": {Upload: 6531585, Download: 55475133, PublicKey: "abc"},
 				"123": {Upload: 62, Download: 173, PublicKey: "123"},
-				"qwe": {Upload: 20, Download: 40, PublicKey: "123"},
+				"qwe": {Upload: 20, Download: 40, PublicKey: "qwe"},
 			},
 			nil,
 		).Times(1),
-		// store.EXPECT().LoadUsage(ctx).Return(
-		// 	map[string]ingest.PeerUsage{
-		// 		"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
-		// 		"qwe": {Upload: 40, Download: 85, PublicKey: "qwe"},
-		// 		"xyz": {Upload: 37 + 50, Download: 98 + 150, PublicKey: "xyz"},
-		// 		"123": {Upload: 45 + 107, Download: 120 + 263, PublicKey: "123"},
-		// 		"456": {Upload: 124728866, Download: 155917550, PublicKey: "456"},
-		// 		"abc": {Upload: 49 + 128001692, Download: 137 + 186202004, PublicKey: "abc"},
-		// 	},
-		// 	nil,
-		// ).Times(1),
+		store.EXPECT().LoadUsage(ctx).Return(
+			map[string]ingest.PeerUsage{
+				"852": {Upload: 186580512, Download: 995098551, PublicKey: "852"},
+				"qwe": {Upload: 60, Download: 125, PublicKey: "qwe"},
+				"xyz": {Upload: 106, Download: 289, PublicKey: "xyz"},
+				"123": {Upload: 156, Download: 312, PublicKey: "123"},
+				"456": {Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				"abc": {Upload: 6531634, Download: 55475270, PublicKey: "abc"},
+			},
+			nil,
+		).Times(1),
 	)
 
 	gomock.InOrder(
@@ -790,34 +790,34 @@ func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 			},
 			gatherTime,
 		).Return(nil).Times(1),
-		// store.EXPECT().IngestUsage(
-		// 	ctx,
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 30, Download: 75, PublicKey: "qwe"},
-		// 		{Upload: 53 + 107, Download: 132 + 263, PublicKey: "123"},
-		// 	},
-		// 	gatherTime,
-		// ).Return(nil).Times(1),
-		// store.EXPECT().IngestUsage(
-		// 	ctx,
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 40, Download: 85, PublicKey: "qwe"},
-		// 		{Upload: 37 + 50, Download: 98 + 150, PublicKey: "xyz"},
-		// 		{Upload: 45 + 107, Download: 120 + 263, PublicKey: "123"},
-		// 		{Upload: 124728866, Download: 155917550, PublicKey: "456"},
-		// 		{Upload: 49 + 128001692, Download: 137 + 186202004, PublicKey: "abc"},
-		// 	},
-		// 	gatherTime,
-		// ).Return(nil).Times(1),
-		// store.EXPECT().IngestUsage(
-		// 	ctx,
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 203658612 + 124728866, Download: 220351578 + 155917550, PublicKey: "456"},
-		// 		{Upload: 50 + 40, Download: 95 + 85, PublicKey: "qwe"},
-		// 		{Upload: 76 + 37 + 50, Download: 168 + 98 + 150, PublicKey: "xyz"},
-		// 	},
-		// 	gatherTime,
-		// ).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 30 + 20, Download: 75 + 40, PublicKey: "qwe"},
+				{Upload: 53 + 62, Download: 132 + 173, PublicKey: "123"},
+			},
+			gatherTime,
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 40 + 20, Download: 85 + 40, PublicKey: "qwe"},
+				{Upload: 37 + 69, Download: 98 + 191, PublicKey: "xyz"},
+				{Upload: 94 + 62, Download: 139 + 173, PublicKey: "123"},
+				{Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				{Upload: 49 + 6531585, Download: 137 + 55475133, PublicKey: "abc"},
+			},
+			gatherTime,
+		).Return(nil).Times(1),
+		store.EXPECT().IngestUsage(
+			ctx,
+			[]ingest.PeerUsage{
+				{Upload: 203658612 + 124728866, Download: 220351578 + 155917550, PublicKey: "456"},
+				{Upload: 50 + 186580512, Download: 95 + 995098551, PublicKey: "852"},
+				{Upload: 76 + 37 + 69, Download: 168 + 98 + 191, PublicKey: "xyz"},
+			},
+			gatherTime,
+		).Return(nil).Times(1),
 	)
 
 	wgPeers := mocks.NewMockWgPeers(ctrl)
@@ -879,34 +879,34 @@ func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 			gatherTime,
 			nil,
 		).Times(1),
-		// wgPeers.EXPECT().Usage(ctx).Return(
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 30, Download: 75, PublicKey: "qwe"},
-		// 		{Upload: 53, Download: 132, PublicKey: "123"},
-		// 	},
-		// 	gatherTime,
-		// 	nil,
-		// ).Times(1),
-		// wgPeers.EXPECT().Usage(ctx).Return(
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 40, Download: 85, PublicKey: "qwe"},
-		// 		{Upload: 37, Download: 98, PublicKey: "xyz"},
-		// 		{Upload: 45, Download: 120, PublicKey: "123"},
-		// 		{Upload: 124728866, Download: 155917550, PublicKey: "456"},
-		// 		{Upload: 49, Download: 137, PublicKey: "abc"},
-		// 	},
-		// 	gatherTime,
-		// 	nil,
-		// ).Times(1),
-		// wgPeers.EXPECT().Usage(ctx).Return(
-		// 	[]ingest.PeerUsage{
-		// 		{Upload: 203658612, Download: 220351578, PublicKey: "456"},
-		// 		{Upload: 50, Download: 95, PublicKey: "qwe"},
-		// 		{Upload: 76, Download: 168, PublicKey: "xyz"},
-		// 	},
-		// 	gatherTime,
-		// 	nil,
-		// ).Times(1),
+		wgPeers.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 30, Download: 75, PublicKey: "qwe"},
+				{Upload: 53, Download: 132, PublicKey: "123"},
+			},
+			gatherTime,
+			nil,
+		).Times(1),
+		wgPeers.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 40, Download: 85, PublicKey: "qwe"},
+				{Upload: 37, Download: 98, PublicKey: "xyz"},
+				{Upload: 94, Download: 139, PublicKey: "123"},
+				{Upload: 124728866, Download: 155917550, PublicKey: "456"},
+				{Upload: 49, Download: 137, PublicKey: "abc"},
+			},
+			gatherTime,
+			nil,
+		).Times(1),
+		wgPeers.EXPECT().Usage(ctx).Return(
+			[]ingest.PeerUsage{
+				{Upload: 203658612, Download: 220351578, PublicKey: "456"},
+				{Upload: 50, Download: 95, PublicKey: "852"},
+				{Upload: 76, Download: 168, PublicKey: "xyz"},
+			},
+			gatherTime,
+			nil,
+		).Times(1),
 	)
 
 	e := ingest.NewEngine(wgPeers, store, zerolog.New(io.Discard))
@@ -959,11 +959,23 @@ func xTestEngineMultipleDynamicPeersWithRestarts(t *testing.T) {
 	case <-wait:
 		t.Fatal("unexpected engine run termination")
 	}
-	// select {
-	// case ticker <- ingest.None{}:
-	// case <-wait:
-	// 	t.Fatal("unexpected engine run termination")
-	// }
+	for i := 0; i < 2; i++ {
+		select {
+		case ticker <- ingest.None{}:
+		case <-wait:
+			t.Fatal("unexpected engine run termination")
+		}
+	}
+	select {
+	case wgUpEvents <- ingest.WgUpEvent{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
+	select {
+	case ticker <- ingest.None{}:
+	case <-wait:
+		t.Fatal("unexpected engine run termination")
+	}
 
 	done()
 	<-wait
